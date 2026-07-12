@@ -1,0 +1,9 @@
+.next
+node_modules
+.env
+.env.development
+.build.log
+pratos.txt
+data/
+persistent/
+infra/migrations/2_seed_test_items.js

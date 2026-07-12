@@ -1,0 +1,25 @@
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --navy:       #0D1B2A;
+  --navy-light: #1A2E44;
+  --yellow:     #FFD60A;
+  --orange:     #FF6B2B;
+  --red:        #E63946;
+  --green:      #2DC653;
+  --cream:      #FFF8F0;
+  --bg:         #f0eae2;
+  --font:       'Poppins', system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--navy);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+a { text-decoration: none; color: inherit; }
+button { font-family: inherit; }
+input, select, textarea { font-family: inherit; }

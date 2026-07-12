@@ -1,0 +1,220 @@
+// ─── Bodogami — Prisma Schema ─────────────────────────────────────────────────
+// Local-First POS • UUID v7 como PK (gerado na camada de aplicação)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Usuários / Operadores ────────────────────────────────────────────────────
+model User {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name      String   @db.VarChar(100)
+  email     String   @unique @db.VarChar(200)
+  password  String
+  role      UserRole @default(WAITER)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  comandas Comanda[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  CASHIER
+  WAITER
+  KITCHEN
+}
+
+// ─── Itens do Cardápio ────────────────────────────────────────────────────────
+model MenuItem {
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name        String   @db.VarChar(120)
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  // 'kitchen' | 'bar' | 'cashier' — roteamento para impressora
+  category    String   @db.VarChar(30)
+  subcategory String?  @db.VarChar(60)
+  imageUrl    String?  @map("image_url")
+  available   Boolean  @default(true)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  comandaItems ComandaItem[]
+
+  @@index([category])
+  @@index([available])
+  @@map("menu_items")
+}
+
+// ─── Mesas ────────────────────────────────────────────────────────────────────
+model Table {
+  id        String      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  number    Int         @unique
+  label     String      @db.VarChar(50)   // ex: "Mesa 5", "Balcão"
+  capacity  Int         @default(4)
+  status    TableStatus @default(FREE)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  comandas Comanda[]
+
+  @@map("tables")
+}
+
+enum TableStatus {
+  FREE
+  OCCUPIED
+  RESERVED
+}
+
+// ─── Comandas ─────────────────────────────────────────────────────────────────
+model Comanda {
+  id           String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  number       Int           @default(autoincrement())   // número legível (ex: #42)
+  tableId      String?       @map("table_id") @db.Uuid
+  customerName String?       @map("customer_name") @db.VarChar(100)
+  userId       String?       @map("user_id") @db.Uuid   // garçom responsável
+  status       ComandaStatus @default(OPEN)
+  notes        String?
+
+  // Ajustes de fechamento
+  surchargeType  String?  @map("surcharge_type") @db.VarChar(10) // 'percent' | 'fixed'
+  surchargeValue Decimal? @default(0) @map("surcharge_value") @db.Decimal(10, 2)
+  discountType   String?  @map("discount_type") @db.VarChar(10)
+  discountValue  Decimal? @default(0) @map("discount_value") @db.Decimal(10, 2)
+
+  openedAt  DateTime  @default(now()) @map("opened_at")
+  closedAt  DateTime? @map("closed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  table        Table?        @relation(fields: [tableId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id])
+  items        ComandaItem[]
+  payments     Payment[]
+
+  @@index([status])
+  @@index([openedAt])
+  @@map("comandas")
+}
+
+enum ComandaStatus {
+  OPEN
+  PREPARING
+  CLOSED
+  CANCELLED
+}
+
+// ─── Itens de Comanda ─────────────────────────────────────────────────────────
+model ComandaItem {
+  id         String          @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  comandaId  String          @map("comanda_id") @db.Uuid
+  menuItemId String          @map("menu_item_id") @db.Uuid
+  quantity   Int             @default(1)
+  unitPrice  Decimal         @map("unit_price") @db.Decimal(10, 2) // snapshot do preço
+  notes      String?         @db.VarChar(300)
+  status     OrderItemStatus @default(PENDING)
+  sentAt     DateTime?       @map("sent_at")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  comanda  Comanda  @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([comandaId])
+  @@index([status])
+  @@map("comanda_items")
+}
+
+enum OrderItemStatus {
+  PENDING
+  SENT
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+// ─── Pagamentos ───────────────────────────────────────────────────────────────
+model Payment {
+  id         String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  comandaId  String        @map("comanda_id") @db.Uuid
+  method     PaymentMethod
+  amount     Decimal       @db.Decimal(10, 2)
+  notes      String?       @db.VarChar(200)
+  paidAt     DateTime      @default(now()) @map("paid_at")
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  comanda Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+
+  @@index([comandaId])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  PIX
+  VOUCHER
+}
+
+// ─── Impressoras ──────────────────────────────────────────────────────────────
+model Printer {
+  id        String  @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  category  String  @unique @db.VarChar(30) // 'kitchen' | 'bar' | 'cashier'
+  ip        String  @db.VarChar(45)
+  port      Int     @default(9100)
+  label     String? @db.VarChar(60)
+  enabled   Boolean @default(true)
+
+  @@map("printers")
+}
+
+// ─── Fila de Sincronização ───────────────────────────────────────────────────
+// Persiste todos os eventos para envio assíncrono à nuvem.
+// NUNCA bloqueia a operação do sistema.
+model SyncQueue {
+  id           String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  eventType    String    @map("event_type") @db.VarChar(100) // ex: 'comanda.created'
+  entityType   String    @map("entity_type") @db.VarChar(50) // ex: 'Comanda'
+  entityId     String    @map("entity_id") @db.Uuid
+  payload      Json
+  status       SyncStatus @default(PENDING)
+  attempts     Int       @default(0)
+  lastAttempt  DateTime? @map("last_attempt")
+  nextRetry    DateTime? @map("next_retry")
+  errorMessage String?   @map("error_message") @db.Text
+  syncedAt     DateTime? @map("synced_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([status])
+  @@index([nextRetry])
+  @@index([entityType, entityId])
+  @@map("sync_queue")
+}
+
+enum SyncStatus {
+  PENDING
+  IN_PROGRESS
+  SYNCED
+  FAILED
+  SKIPPED
+}
+
+// ─── Configurações do Sistema ─────────────────────────────────────────────────
+model SystemConfig {
+  key       String   @id @db.VarChar(100)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}

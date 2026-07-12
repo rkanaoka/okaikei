@@ -1,0 +1,25 @@
+{
+  "name": "@bodogami/frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev":     "vite",
+    "build":   "tsc && vite build",
+    "preview": "vite preview",
+    "lint":    "eslint src --ext ts,tsx"
+  },
+  "dependencies": {
+    "react":                "^18.3.1",
+    "react-dom":            "^18.3.1",
+    "react-router-dom":     "^6.22.3",
+    "socket.io-client":     "^4.7.4",
+    "axios":                "^1.6.7"
+  },
+  "devDependencies": {
+    "@types/react":          "^18.3.1",
+    "@types/react-dom":      "^18.3.0",
+    "@vitejs/plugin-react":  "^4.2.1",
+    "typescript":            "^5.4.3",
+    "vite":                  "^5.2.0"
+  }
+}
