@@ -8,6 +8,8 @@ import { PrintingService } from '@/modules/printing/printing.service';
 import { uuidv7 }          from 'uuidv7';
 import { Prisma, ComandaStatus, PaymentMethod } from '@prisma/client';
 
+const CANCEL_PASSWORD = '123';
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -126,7 +128,7 @@ export class OrdersService {
     const updatedComanda = await this.prisma.comanda.update({
       where: { id: comandaId },
       data:  { status: comanda.status === 'OPEN' ? 'PREPARING' : comanda.status },
-      include: { table: true, items: { include: { menuItem: true } }, payments: true },
+      include: { table: true, items: { include: { menuItem: true } }, payments: true, user: { select: { id: true, name: true } } },
     });
 
     // Impressão por categoria (não bloqueia)
@@ -147,6 +149,55 @@ export class OrdersService {
     await this.sync.enqueue('comanda.items_added', 'Comanda', comandaId, { items: inserted });
 
     return { comanda: enriched, items: inserted };
+  }
+
+  async removeItem(comandaId: string, itemId: string, dto: { reasonId: string; password: string }) {
+    if (dto.password !== CANCEL_PASSWORD) {
+      throw new BadRequestException('Senha de segurança incorreta');
+    }
+    if (!dto.reasonId) {
+      throw new BadRequestException('Selecione um motivo de cancelamento');
+    }
+
+    const comanda = await this.prisma.comanda.findUnique({ where: { id: comandaId } });
+    if (!comanda) throw new NotFoundException('Comanda não encontrada');
+    if (comanda.status === 'CLOSED' || comanda.status === 'CANCELLED') {
+      throw new BadRequestException('Comanda encerrada');
+    }
+
+    const item = await this.prisma.comandaItem.findUnique({ where: { id: itemId }, include: { menuItem: true } });
+    if (!item || item.comandaId !== comandaId) {
+      throw new NotFoundException('Item não encontrado nesta comanda');
+    }
+
+    const reason = await this.prisma.cancellationReason.findUnique({ where: { id: dto.reasonId } });
+    if (!reason) throw new NotFoundException('Motivo de cancelamento não encontrado');
+
+    await this.prisma.$transaction([
+      this.prisma.cancellation.create({
+        data: {
+          id:        uuidv7(),
+          reasonId:  dto.reasonId,
+          comandaId,
+          itemName:  item.menuItem.name,
+          quantity:  item.quantity,
+          amount:    Number(item.unitPrice) * item.quantity,
+        },
+      }),
+      this.prisma.comandaItem.delete({ where: { id: itemId } }),
+    ]);
+
+    const updatedComanda = await this.prisma.comanda.findUnique({
+      where:   { id: comandaId },
+      include: { table: true, items: { include: { menuItem: true } }, payments: true },
+    });
+
+    const enriched = this.enrichComanda(updatedComanda);
+    this.nats.publish('comanda.item_removed', { comandaId, itemId, reasonId: dto.reasonId });
+    this.gateway.emitComandaUpdated(enriched);
+    await this.sync.enqueue('comanda.item_removed', 'Comanda', comandaId, { itemId, reasonId: dto.reasonId });
+
+    return enriched;
   }
 
   async closeComanda(comandaId: string, dto: {
@@ -185,6 +236,9 @@ export class OrdersService {
       );
     }
 
+    // Pagamentos são atribuídos ao caixa aberto no momento, se houver um
+    const openCashSession = await this.prisma.cashSession.findFirst({ where: { status: 'OPEN' } });
+
     // Transação atômica: fechar comanda + inserir pagamentos
     const [closedComanda, insertedPayments] = await this.prisma.$transaction(async (tx) => {
       const closed = await tx.comanda.update({
@@ -203,7 +257,10 @@ export class OrdersService {
       const payments = await Promise.all(
         dto.payments.map((p) =>
           tx.payment.create({
-            data: { id: uuidv7(), comandaId, method: p.method, amount: p.amount, notes: p.notes ?? null },
+            data: {
+              id: uuidv7(), comandaId, method: p.method, amount: p.amount, notes: p.notes ?? null,
+              cashSessionId: openCashSession?.id ?? null,
+            },
           }),
         ),
       );

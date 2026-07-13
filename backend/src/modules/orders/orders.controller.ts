@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Param, Body, Query, HttpCode,
+  Controller, Get, Post, Put, Delete, Param, Body, Query, HttpCode,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { ComandaStatus, PaymentMethod } from '@prisma/client';
@@ -38,6 +38,16 @@ export class OrdersController {
     },
   ) {
     return this.orders.addItems(id, body);
+  }
+
+  @Delete(':id/items/:itemId')
+  @HttpCode(200)
+  removeItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() body: { reasonId: string; password: string },
+  ) {
+    return this.orders.removeItem(id, itemId, body);
   }
 
   @Post(':id/pay')

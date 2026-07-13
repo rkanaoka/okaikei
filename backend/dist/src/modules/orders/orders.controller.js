@@ -32,6 +32,9 @@ let OrdersController = class OrdersController {
     addItems(id, body) {
         return this.orders.addItems(id, body);
     }
+    removeItem(id, itemId, body) {
+        return this.orders.removeItem(id, itemId, body);
+    }
     close(id, body) {
         return this.orders.closeComanda(id, body);
     }
@@ -67,6 +70,16 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "addItems", null);
+__decorate([
+    (0, common_1.Delete)(':id/items/:itemId'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('itemId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "removeItem", null);
 __decorate([
     (0, common_1.Post)(':id/pay'),
     (0, common_1.HttpCode)(200),

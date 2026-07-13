@@ -146,17 +146,20 @@ enum OrderItemStatus {
 
 // ─── Pagamentos ───────────────────────────────────────────────────────────────
 model Payment {
-  id         String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  comandaId  String        @map("comanda_id") @db.Uuid
-  method     PaymentMethod
-  amount     Decimal       @db.Decimal(10, 2)
-  notes      String?       @db.VarChar(200)
-  paidAt     DateTime      @default(now()) @map("paid_at")
-  createdAt  DateTime      @default(now()) @map("created_at")
+  id            String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  comandaId     String        @map("comanda_id") @db.Uuid
+  method        PaymentMethod
+  amount        Decimal       @db.Decimal(10, 2)
+  notes         String?       @db.VarChar(200)
+  paidAt        DateTime      @default(now()) @map("paid_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  cashSessionId String?       @map("cash_session_id") @db.Uuid
 
-  comanda Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+  comanda     Comanda      @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+  cashSession CashSession? @relation(fields: [cashSessionId], references: [id])
 
   @@index([comandaId])
+  @@index([cashSessionId])
   @@map("payments")
 }
 
@@ -165,6 +168,98 @@ enum PaymentMethod {
   CARD
   PIX
   VOUCHER
+}
+
+// ─── Motivos de Cancelamento ──────────────────────────────────────────────────
+model CancellationReason {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  label     String   @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  cancellations Cancellation[]
+
+  @@map("cancellation_reasons")
+}
+
+// Log de itens cancelados — preserva o item mesmo após a remoção do comanda_items
+model Cancellation {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  reasonId  String   @map("reason_id") @db.Uuid
+  comandaId String?  @map("comanda_id") @db.Uuid
+  itemName  String   @map("item_name") @db.VarChar(120)
+  quantity  Int      @default(1)
+  amount    Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  reason CancellationReason @relation(fields: [reasonId], references: [id])
+
+  @@index([reasonId])
+  @@map("cancellations")
+}
+
+// ─── Motivos de Desconto ──────────────────────────────────────────────────────
+model DiscountReason {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  label     String   @db.VarChar(100)
+  type      String   @db.VarChar(10) // 'percent' | 'fixed'
+  value     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("discount_reasons")
+}
+
+// ─── Modelos de Impressão ─────────────────────────────────────────────────────
+model PrintTemplate {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  type      String   @unique @db.VarChar(20) // 'kitchen' | 'bar' | 'receipt' | 'fiscal'
+  enabled   Boolean  @default(true)
+  config    Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("print_templates")
+}
+
+// ─── Frente de Caixa ──────────────────────────────────────────────────────────
+model CashSession {
+  id            String            @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  openingAmount Decimal           @default(0) @map("opening_amount") @db.Decimal(10, 2)
+  openingNotes  String?           @map("opening_notes")
+  closingNotes  String?           @map("closing_notes")
+  closingCounts Json?             @map("closing_counts") // snapshot {method: valorEmCaixa} no fechamento
+  status        CashSessionStatus @default(OPEN)
+  openedAt      DateTime          @default(now()) @map("opened_at")
+  closedAt      DateTime?         @map("closed_at")
+
+  movements CashMovement[]
+  payments  Payment[]
+
+  @@index([status])
+  @@map("cash_sessions")
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+// ─── Movimentações de Caixa (Retirada / Reforço) ─────────────────────────────
+model CashMovement {
+  id            String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  cashSessionId String           @map("cash_session_id") @db.Uuid
+  type          CashMovementType
+  amount        Decimal          @db.Decimal(10, 2)
+  notes         String?
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  cashSession CashSession @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+
+  @@index([cashSessionId])
+  @@map("cash_movements")
+}
+
+enum CashMovementType {
+  WITHDRAWAL
+  REINFORCEMENT
 }
 
 // ─── Impressoras ──────────────────────────────────────────────────────────────

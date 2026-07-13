@@ -33,6 +33,10 @@ export declare class OrdersService {
         comanda: any;
         items: any[];
     }>;
+    removeItem(comandaId: string, itemId: string, dto: {
+        reasonId: string;
+        password: string;
+    }): Promise<any>;
     closeComanda(comandaId: string, dto: {
         surchargeType?: string;
         surchargeValue?: number;
@@ -54,6 +58,7 @@ export declare class OrdersService {
             method: import(".prisma/client").$Enums.PaymentMethod;
             amount: Prisma.Decimal;
             paidAt: Date;
+            cashSessionId: string | null;
         }[];
         subtotal: number;
         total: number;

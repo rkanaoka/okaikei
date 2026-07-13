@@ -21,6 +21,9 @@ const payments_module_1 = require("./modules/payments/payments.module");
 const printing_module_1 = require("./modules/printing/printing.module");
 const sync_module_1 = require("./modules/sync/sync.module");
 const config_module_1 = require("./modules/config/config.module");
+const cash_module_1 = require("./modules/cash/cash.module");
+const reasons_module_1 = require("./modules/reasons/reasons.module");
+const print_templates_module_1 = require("./modules/print-templates/print-templates.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -40,6 +43,9 @@ exports.AppModule = AppModule = __decorate([
             printing_module_1.PrintingModule,
             sync_module_1.SyncModule,
             config_module_1.ConfigsModule,
+            cash_module_1.CashModule,
+            reasons_module_1.ReasonsModule,
+            print_templates_module_1.PrintTemplatesModule,
         ],
     })
 ], AppModule);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { comandasApi } from '@/services/api';
+import { comandasApi, reasonsApi } from '@/services/api';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653', navyLight:'#1A2E44', cream:'#FFF8F0' };
 const fmtBRL = (v:any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
@@ -98,7 +98,9 @@ export default function Caixa() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
 
-  const [discount,  setDiscount]  = useState('0');
+  const [discount,  setDiscount]  = useState<{ type: 'percent'|'fixed'; value: string }>({ type:'fixed', value:'0' });
+  const [discountReasonId, setDiscountReasonId] = useState('');
+  const [discountReasons,  setDiscountReasons]  = useState<any[]>([]);
   // Gorjeta compulsória de 10% aplicada por padrão; caixa pode remover ou editar (% ou R$)
   const [surcharge, setSurcharge] = useState<{ type: 'percent'|'fixed'|''; value: string }>({ type:'percent', value:'10' });
   const [payments,  setPayments]  = useState<Payment[]>([{ method:'CASH', amount:'' }]);
@@ -107,7 +109,19 @@ export default function Caixa() {
   const [payError, setPayError] = useState('');
   const [showPay,  setShowPay]  = useState(false);
 
+  const [cancelReasons, setCancelReasons] = useState<any[]>([]);
+  const [cancelTarget, setCancelTarget]   = useState<any>(null);
+  const [cancelReasonId, setCancelReasonId] = useState('');
+  const [cancelPassword, setCancelPassword] = useState('');
+  const [cancelling, setCancelling]         = useState(false);
+  const [cancelError, setCancelError]       = useState('');
+
   const initedSurcharge = useRef(false);
+
+  useEffect(() => {
+    reasonsApi.cancellation.list().then((r:any) => setCancelReasons(r)).catch(()=>{});
+    reasonsApi.discount.list().then((r:any) => setDiscountReasons(r)).catch(()=>{});
+  }, []);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -129,7 +143,8 @@ export default function Caixa() {
   useEffect(() => { load(); }, [load]);
 
   const subtotal   = (comanda?.items ?? []).reduce((s:number,i:any) => s + i.quantity * parseFloat(i.unitPrice), 0);
-  const discVal    = Math.min(subtotal, parseFloat(discount)||0);
+  const discRaw    = discount.type === 'percent' ? subtotal * (parseFloat(discount.value)||0) / 100 : (parseFloat(discount.value)||0);
+  const discVal    = Math.min(subtotal, Math.max(0, discRaw));
   const surchVal   = surcharge.type && parseFloat(surcharge.value) > 0
     ? (surcharge.type === 'percent' ? subtotal * parseFloat(surcharge.value) / 100 : parseFloat(surcharge.value))
     : 0;
@@ -154,16 +169,46 @@ export default function Caixa() {
     updatePayment(idx, 'amount', amt);
   }
 
+  function openCancelModal(item: any) {
+    setCancelTarget(item);
+    setCancelReasonId('');
+    setCancelPassword('');
+    setCancelError('');
+  }
+
+  async function confirmCancelItem() {
+    if (!id || !cancelTarget) return;
+    if (!cancelReasonId) { setCancelError('Selecione um motivo.'); return; }
+    if (!cancelPassword) { setCancelError('Informe a senha de segurança.'); return; }
+    setCancelling(true); setCancelError('');
+    try {
+      await comandasApi.removeItem(id, cancelTarget.id, { reasonId: cancelReasonId, password: cancelPassword });
+      setCancelTarget(null);
+      await load();
+    } catch (e:any) {
+      setCancelError(e.message);
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  function selectDiscountReason(reasonId: string) {
+    setDiscountReasonId(reasonId);
+    const r = discountReasons.find((x:any) => x.id === reasonId);
+    if (r) setDiscount({ type: r.type, value: String(r.value) });
+    else setDiscount({ type:'fixed', value:'0' });
+  }
+
   async function pay() {
     if (remaining > 0.01) { setPayError('Valor recebido insuficiente.'); return; }
     const validPays = payments.filter(p => parseFloat(p.amount) > 0);
-    if (!validPays.length) { setPayError('Adicione ao menos um pagamento.'); return; }
+    if (total > 0 && !validPays.length) { setPayError('Adicione ao menos um pagamento.'); return; }
     setPaying(true); setPayError('');
     try {
       await comandasApi.pay(id!, {
         payments: validPays.map(p => ({ method: p.method, amount: parseFloat(p.amount) })),
-        discountType:   discVal > 0 ? 'fixed' : undefined,
-        discountValue:  discVal || undefined,
+        discountType:   discVal > 0 ? discount.type : undefined,
+        discountValue:  discVal > 0 ? (parseFloat(discount.value) || 0) : undefined,
         surchargeType:  surcharge.type || undefined,
         surchargeValue: surcharge.type ? (parseFloat(surcharge.value) || 0) : undefined,
       });
@@ -223,9 +268,17 @@ export default function Caixa() {
                   {item.notes && <div style={{ fontSize:12, color:BRAND.orange, marginTop:2 }}>📝 {item.notes}</div>}
                   <div style={{ fontSize:11, color:ic.color, fontWeight:700, marginTop:2, textTransform:'uppercase', letterSpacing:.5 }}>{ic.label}</div>
                 </div>
-                <div style={{ textAlign:'right', flexShrink:0, marginLeft:12 }}>
-                  <div style={{ fontSize:12, color:'#999' }}>{item.quantity}x {fmtBRL(item.unitPrice)}</div>
-                  <div style={{ fontWeight:900, color:BRAND.navy, fontSize:15 }}>{fmtBRL(item.quantity * parseFloat(item.unitPrice))}</div>
+                <div style={{ textAlign:'right', flexShrink:0, marginLeft:12, display:'flex', alignItems:'center', gap:10 }}>
+                  <div>
+                    <div style={{ fontSize:12, color:'#999' }}>{item.quantity}x {fmtBRL(item.unitPrice)}</div>
+                    <div style={{ fontWeight:900, color:BRAND.navy, fontSize:15 }}>{fmtBRL(item.quantity * parseFloat(item.unitPrice))}</div>
+                  </div>
+                  {comanda?.status !== 'CLOSED' && (
+                    <button onClick={()=>openCancelModal(item)} title="Cancelar item"
+                      style={{ background:'none', border:'none', color:BRAND.red, fontSize:18, cursor:'pointer', padding:4 }}>
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -243,11 +296,30 @@ export default function Caixa() {
 
           {comanda?.status !== 'CLOSED' && (
             <>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                <span style={{ color:'#666', fontSize:13 }}>Desconto (R$)</span>
-                <input type="number" min="0" step="0.01" value={discount}
-                  onChange={e=>setDiscount(e.target.value)}
-                  style={{ width:90, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px', fontSize:14, fontWeight:700, outline:'none' }} />
+              <div style={{ marginBottom:8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ color:'#666', fontSize:13 }}>Desconto</span>
+                  <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                    <select value={discount.type}
+                      onChange={e=>{ setDiscount(d=>({ ...d, type:e.target.value as 'percent'|'fixed' })); setDiscountReasonId(''); }}
+                      style={{ border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 6px', fontSize:12, fontWeight:700, outline:'none' }}>
+                      <option value="fixed">R$</option>
+                      <option value="percent">%</option>
+                    </select>
+                    <input type="number" min="0" step="0.01" value={discount.value}
+                      onChange={e=>{ setDiscount(d=>({ ...d, value:e.target.value })); setDiscountReasonId(''); }}
+                      style={{ width:80, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px', fontSize:14, fontWeight:700, outline:'none' }} />
+                  </div>
+                </div>
+                {discountReasons.length > 0 && (
+                  <select value={discountReasonId} onChange={e=>selectDiscountReason(e.target.value)}
+                    style={{ width:'100%', boxSizing:'border-box', border:'1.5px solid #ddd', borderRadius:8, padding:'6px 10px', fontSize:12, outline:'none', marginTop:8, background:'#fff', color:'#666' }}>
+                    <option value="">Motivo do desconto (opcional)</option>
+                    {discountReasons.map((r:any) => (
+                      <option key={r.id} value={r.id}>{r.label} ({r.type==='percent' ? `${r.value}%` : fmtBRL(r.value)})</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <GratuityControl surcharge={surcharge} onChange={setSurcharge} />
             </>
@@ -290,7 +362,7 @@ export default function Caixa() {
 
             {/* Summary chip */}
             <div style={{ background:`${BRAND.navy}0d`, borderRadius:14, padding:'16px', marginBottom:20 }}>
-              {discVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Desconto</span><span style={{ color:BRAND.green }}>−{fmtBRL(discVal)}</span></div>}
+              {discVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Desconto {discount.type==='percent' ? `(${discount.value}%)` : ''}</span><span style={{ color:BRAND.green }}>−{fmtBRL(discVal)}</span></div>}
               {surchVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Gorjeta {surcharge.type==='percent' ? `(${surcharge.value}%)` : ''}</span><span style={{ color:BRAND.orange }}>+{fmtBRL(surchVal)}</span></div>}
               <div style={{ display:'flex', justifyContent:'space-between' }}>
                 <span style={{ fontWeight:900, fontSize:17, color:BRAND.navy }}>Total a pagar</span>
@@ -352,6 +424,51 @@ export default function Caixa() {
             <PillBtn onClick={pay} disabled={paying || remaining > 0.01}>
               {paying ? 'Fechando…' : '✓ Confirmar Pagamento'}
             </PillBtn>
+          </div>
+        </div>
+      )}
+
+      {/* Cancelar item */}
+      {cancelTarget && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(13,27,42,.8)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:150 }}
+          onClick={e=>{ if (e.target === e.currentTarget) setCancelTarget(null); }}>
+          <div style={{ background:BRAND.cream, borderRadius:'24px 24px 0 0', borderTop:`3px solid ${BRAND.navy}`, padding:'24px 20px 40px', width:'100%', maxWidth:420 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <div style={{ fontWeight:900, fontSize:18, color:BRAND.navy }}>Cancelar Item</div>
+              <button onClick={()=>setCancelTarget(null)} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:BRAND.navy }}>✕</button>
+            </div>
+            <p style={{ fontSize:14, color:BRAND.orange, fontWeight:700, marginBottom:16 }}>
+              {cancelTarget.menuItem?.name ?? 'Item'} — {cancelTarget.quantity}x
+            </p>
+
+            <div style={{ marginBottom:14 }}>
+              <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#666', marginBottom:6, textTransform:'uppercase', letterSpacing:.5 }}>
+                Motivo do cancelamento
+              </label>
+              <select value={cancelReasonId} onChange={e=>setCancelReasonId(e.target.value)}
+                style={{ width:'100%', boxSizing:'border-box', border:`2px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit', background:'#fff' }}>
+                <option value="">Selecione…</option>
+                {cancelReasons.map((r:any) => <option key={r.id} value={r.id}>{r.label}</option>)}
+              </select>
+            </div>
+
+            <div style={{ marginBottom:8 }}>
+              <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#666', marginBottom:6, textTransform:'uppercase', letterSpacing:.5 }}>
+                Senha de segurança
+              </label>
+              <input type="password" value={cancelPassword} onChange={e=>setCancelPassword(e.target.value)}
+                onKeyDown={e=>e.key==='Enter' && confirmCancelItem()}
+                style={{ width:'100%', boxSizing:'border-box', border:`2px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }} />
+            </div>
+
+            {cancelError && <p style={{ color:BRAND.red, fontSize:13, fontWeight:700, marginBottom:12 }}>{cancelError}</p>}
+
+            <div style={{ display:'flex', gap:12, marginTop:12 }}>
+              <PillBtn variant="ghost" onClick={()=>setCancelTarget(null)}>Voltar</PillBtn>
+              <PillBtn variant="danger" onClick={confirmCancelItem} disabled={cancelling}>
+                {cancelling ? 'Cancelando…' : 'Confirmar Cancelamento'}
+              </PillBtn>
+            </div>
           </div>
         </div>
       )}

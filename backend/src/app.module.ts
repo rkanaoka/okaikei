@@ -14,6 +14,9 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PrintingModule } from './modules/printing/printing.module';
 import { SyncModule }     from './modules/sync/sync.module';
 import { ConfigsModule }  from './modules/config/config.module';
+import { CashModule }     from './modules/cash/cash.module';
+import { ReasonsModule }  from './modules/reasons/reasons.module';
+import { PrintTemplatesModule } from './modules/print-templates/print-templates.module';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { ConfigsModule }  from './modules/config/config.module';
     PrintingModule,
     SyncModule,
     ConfigsModule,
+    CashModule,
+    ReasonsModule,
+    PrintTemplatesModule,
   ],
 })
 export class AppModule {}

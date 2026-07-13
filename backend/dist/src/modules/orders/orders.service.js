@@ -19,6 +19,7 @@ const events_gateway_1 = require("../../gateway/events.gateway");
 const sync_service_1 = require("../sync/sync.service");
 const printing_service_1 = require("../printing/printing.service");
 const uuidv7_1 = require("uuidv7");
+const CANCEL_PASSWORD = '123';
 let OrdersService = OrdersService_1 = class OrdersService {
     constructor(prisma, redis, nats, gateway, sync, printing) {
         this.prisma = prisma;
@@ -111,7 +112,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
         const updatedComanda = await this.prisma.comanda.update({
             where: { id: comandaId },
             data: { status: comanda.status === 'OPEN' ? 'PREPARING' : comanda.status },
-            include: { table: true, items: { include: { menuItem: true } }, payments: true },
+            include: { table: true, items: { include: { menuItem: true } }, payments: true, user: { select: { id: true, name: true } } },
         });
         if (dto.print !== false) {
             this.printing.printOrderItems(updatedComanda, inserted).catch((err) => this.logger.warn(`Print failed: ${err.message}`));
@@ -125,6 +126,49 @@ let OrdersService = OrdersService_1 = class OrdersService {
         this.gateway.emitOrderSent(inserted, enriched);
         await this.sync.enqueue('comanda.items_added', 'Comanda', comandaId, { items: inserted });
         return { comanda: enriched, items: inserted };
+    }
+    async removeItem(comandaId, itemId, dto) {
+        if (dto.password !== CANCEL_PASSWORD) {
+            throw new common_1.BadRequestException('Senha de segurança incorreta');
+        }
+        if (!dto.reasonId) {
+            throw new common_1.BadRequestException('Selecione um motivo de cancelamento');
+        }
+        const comanda = await this.prisma.comanda.findUnique({ where: { id: comandaId } });
+        if (!comanda)
+            throw new common_1.NotFoundException('Comanda não encontrada');
+        if (comanda.status === 'CLOSED' || comanda.status === 'CANCELLED') {
+            throw new common_1.BadRequestException('Comanda encerrada');
+        }
+        const item = await this.prisma.comandaItem.findUnique({ where: { id: itemId }, include: { menuItem: true } });
+        if (!item || item.comandaId !== comandaId) {
+            throw new common_1.NotFoundException('Item não encontrado nesta comanda');
+        }
+        const reason = await this.prisma.cancellationReason.findUnique({ where: { id: dto.reasonId } });
+        if (!reason)
+            throw new common_1.NotFoundException('Motivo de cancelamento não encontrado');
+        await this.prisma.$transaction([
+            this.prisma.cancellation.create({
+                data: {
+                    id: (0, uuidv7_1.uuidv7)(),
+                    reasonId: dto.reasonId,
+                    comandaId,
+                    itemName: item.menuItem.name,
+                    quantity: item.quantity,
+                    amount: Number(item.unitPrice) * item.quantity,
+                },
+            }),
+            this.prisma.comandaItem.delete({ where: { id: itemId } }),
+        ]);
+        const updatedComanda = await this.prisma.comanda.findUnique({
+            where: { id: comandaId },
+            include: { table: true, items: { include: { menuItem: true } }, payments: true },
+        });
+        const enriched = this.enrichComanda(updatedComanda);
+        this.nats.publish('comanda.item_removed', { comandaId, itemId, reasonId: dto.reasonId });
+        this.gateway.emitComandaUpdated(enriched);
+        await this.sync.enqueue('comanda.item_removed', 'Comanda', comandaId, { itemId, reasonId: dto.reasonId });
+        return enriched;
     }
     async closeComanda(comandaId, dto) {
         const comanda = await this.prisma.comanda.findUnique({
@@ -149,6 +193,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
         if (Math.abs(paid - total) > 0.01) {
             throw new common_1.BadRequestException(`Divergência: pago ${paid.toFixed(2)} vs total ${total.toFixed(2)}`);
         }
+        const openCashSession = await this.prisma.cashSession.findFirst({ where: { status: 'OPEN' } });
         const [closedComanda, insertedPayments] = await this.prisma.$transaction(async (tx) => {
             const closed = await tx.comanda.update({
                 where: { id: comandaId },
@@ -163,7 +208,10 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 include: { table: true, items: { include: { menuItem: true } }, payments: true },
             });
             const payments = await Promise.all(dto.payments.map((p) => tx.payment.create({
-                data: { id: (0, uuidv7_1.uuidv7)(), comandaId, method: p.method, amount: p.amount, notes: p.notes ?? null },
+                data: {
+                    id: (0, uuidv7_1.uuidv7)(), comandaId, method: p.method, amount: p.amount, notes: p.notes ?? null,
+                    cashSessionId: openCashSession?.id ?? null,
+                },
             })));
             return [closed, payments];
         });

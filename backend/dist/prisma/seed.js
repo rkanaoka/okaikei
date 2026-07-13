@@ -109,6 +109,15 @@ async function main() {
         });
     }
     console.log(`  ✓ System config: ${configs.length} keys`);
+    const cancellationLabels = ['Duplicado', 'Saiu sem pagar', 'Cliente devolveu', 'Pedido teste'];
+    const existingCancelLabels = (await prisma.cancellationReason.findMany({ select: { label: true } })).map(r => r.label);
+    const cancelToInsert = cancellationLabels.filter(l => !existingCancelLabels.includes(l));
+    if (cancelToInsert.length > 0) {
+        await prisma.cancellationReason.createMany({
+            data: cancelToInsert.map(label => ({ id: (0, uuidv7_1.uuidv7)(), label })),
+        });
+    }
+    console.log(`  ✓ Motivos de cancelamento: ${cancellationLabels.length} (${cancelToInsert.length} inseridos)`);
     console.log('\n✅  Seed complete!');
     console.log('   Admin: admin@bodogami.com.br / admin123');
     console.log('   Garçom: garcom@bodogami.com.br / garcom123');

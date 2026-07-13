@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { comandasApi, syncApi } from '@/services/api';
 import { useSocketEvent, useJoinRoom } from '@/hooks/useSocket';
 import { WS_EVENTS } from '@/services/socket';
+import CashRegisterMenu from '@/components/CashRegisterMenu';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653' };
 const fmtBRL = (v: any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
@@ -123,7 +124,9 @@ export default function Painel() {
         </div>
         <nav className="nav">
           <SyncBadge status={syncStatus} />
+          <CashRegisterMenu />
           <Link to="/garcom" className="nav-btn">🧑‍🍳 Garçom</Link>
+          <Link to="/admin" className="nav-btn">⚙️ Admin</Link>
           <button className="nav-btn icon-btn" onClick={load}>⟳</button>
         </nav>
       </header>

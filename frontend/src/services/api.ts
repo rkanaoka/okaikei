@@ -45,12 +45,54 @@ export const comandasApi = {
   addItems: (id: string, items: Array<{ menuItemId: string; quantity: number; notes?: string }>) =>
     http.post(`/comandas/${id}/items`, { items, print: true }),
 
+  removeItem: (id: string, itemId: string, d: { reasonId: string; password: string }) =>
+    http.delete(`/comandas/${id}/items/${itemId}`, { data: d }),
+
   pay: (id: string, d: {
     surchargeType?: string; surchargeValue?: number;
     discountType?:  string; discountValue?:  number;
     payments: Array<{ method: string; amount: number }>;
     printReceipt?: boolean;
   }) => http.post(`/comandas/${id}/pay`, d),
+};
+
+// ── Frente de Caixa ────────────────────────────────────────────────────────────
+export const cashApi = {
+  current: () => http.get('/cash/current'),
+
+  open: (d: { openingAmount: number; notes?: string }) => http.post('/cash/open', d),
+
+  addMovement: (id: string, d: { type: 'WITHDRAWAL'|'REINFORCEMENT'; amount: number; notes?: string }) =>
+    http.post(`/cash/${id}/movements`, d),
+
+  summary: (id: string) => http.get(`/cash/${id}/summary`),
+
+  close: (id: string, d: { closingCounts: Record<string, number>; notes?: string }) =>
+    http.post(`/cash/${id}/close`, d),
+};
+
+// ── Motivos de Cancelamento / Desconto ─────────────────────────────────────────
+export const reasonsApi = {
+  cancellation: {
+    list:    () => http.get('/reasons/cancellation'),
+    create:  (d: { label: string }) => http.post('/reasons/cancellation', d),
+    history: () => http.get('/reasons/cancellation/history'),
+  },
+  discount: {
+    list:   () => http.get('/reasons/discount'),
+    create: (d: { label: string; type: 'percent'|'fixed'; value: number }) => http.post('/reasons/discount', d),
+  },
+};
+
+// ── Modelos de Impressão ────────────────────────────────────────────────────────
+export const printTemplatesApi = {
+  list:   () => http.get('/print-templates'),
+  get:    (type: string) => http.get(`/print-templates/${type}`),
+  update: (type: string, d: { enabled?: boolean; config?: Record<string, any> }) =>
+    http.put(`/print-templates/${type}`, d),
+  reset:  (type: string) => http.post(`/print-templates/${type}/reset`, {}),
+  test:   (type: string, d: { enabled?: boolean; config?: Record<string, any> }) =>
+    http.post(`/print-templates/${type}/test`, d),
 };
 
 // ── Sync ──────────────────────────────────────────────────────────────────────

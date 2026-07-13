@@ -22,6 +22,10 @@ export declare class OrdersController {
         comanda: any;
         items: any[];
     }>;
+    removeItem(id: string, itemId: string, body: {
+        reasonId: string;
+        password: string;
+    }): Promise<any>;
     close(id: string, body: {
         surchargeType?: string;
         surchargeValue?: number;
@@ -43,6 +47,7 @@ export declare class OrdersController {
             method: import(".prisma/client").$Enums.PaymentMethod;
             amount: import("@prisma/client/runtime/library").Decimal;
             paidAt: Date;
+            cashSessionId: string | null;
         }[];
         subtotal: number;
         total: number;
