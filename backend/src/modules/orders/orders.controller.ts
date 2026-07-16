@@ -50,6 +50,32 @@ export class OrdersController {
     return this.orders.removeItem(id, itemId, body);
   }
 
+  @Post(':id/transfer-items')
+  @HttpCode(200)
+  transferItems(
+    @Param('id') id: string,
+    @Body() body: { itemIds: string[]; targetComandaId: string },
+  ) {
+    return this.orders.transferItems(id, body);
+  }
+
+  @Put(':id/table')
+  changeTable(@Param('id') id: string, @Body() body: { tableId: string }) {
+    return this.orders.changeTable(id, body);
+  }
+
+  @Post(':id/print-summary')
+  @HttpCode(200)
+  printSummary(@Param('id') id: string) {
+    return this.orders.printSummary(id);
+  }
+
+  @Post('merge-table')
+  @HttpCode(200)
+  mergeTable(@Body() body: { tableId: string }) {
+    return this.orders.mergeTableComandas(body.tableId);
+  }
+
   @Post(':id/pay')
   @HttpCode(200)
   close(

@@ -26,6 +26,22 @@ export declare class OrdersController {
         reasonId: string;
         password: string;
     }): Promise<any>;
+    transferItems(id: string, body: {
+        itemIds: string[];
+        targetComandaId: string;
+    }): Promise<{
+        source: any;
+        target: any;
+    }>;
+    changeTable(id: string, body: {
+        tableId: string;
+    }): Promise<any>;
+    printSummary(id: string): Promise<{
+        ok: boolean;
+    }>;
+    mergeTable(body: {
+        tableId: string;
+    }): Promise<any>;
     close(id: string, body: {
         surchargeType?: string;
         surchargeValue?: number;

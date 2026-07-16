@@ -8,6 +8,8 @@ export declare class PrintingService {
     private getTemplate;
     printOrderItems(comanda: any, items: any[]): Promise<void>;
     printReceipt(comanda: any, payments: any[], total: number): Promise<void>;
+    printSummary(comanda: any): Promise<void>;
+    printMergeReceipt(table: any, snapshot: any[], merged: any): Promise<void>;
     printTest(category: string, printer: {
         ip: string;
         port: number;
@@ -20,4 +22,6 @@ export declare class PrintingService {
     private buildOrderTicket;
     private buildReceiptTicket;
     private buildFiscalTicket;
+    private buildSummaryTicket;
+    private buildMergeReceiptTicket;
 }

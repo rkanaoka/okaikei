@@ -49,6 +49,15 @@ async function main() {
         });
     }
     console.log(`  ✓ Tables: ${tableLabels.length} created`);
+    const categoryNames = ['Prato Principal', 'Para Compartilhar', 'Lanches', 'Refrigerantes', 'Cervejas', 'Drinks Alcoólicos'];
+    const existingCategoryNames = (await prisma.menuCategory.findMany({ select: { name: true } })).map(c => c.name);
+    const categoriesToInsert = categoryNames.filter(n => !existingCategoryNames.includes(n));
+    if (categoriesToInsert.length > 0) {
+        await prisma.menuCategory.createMany({
+            data: categoriesToInsert.map((name) => ({ id: (0, uuidv7_1.uuidv7)(), name, sortOrder: categoryNames.indexOf(name) })),
+        });
+    }
+    console.log(`  ✓ Categorias do cardápio: ${categoryNames.length} (${categoriesToInsert.length} inseridas)`);
     const menuItems = [
         { name: 'Ramen Shoyu', category: 'kitchen', price: 42.00, description: 'Caldo de frango, chashu, ovo marinado, nori' },
         { name: 'Ramen Missô', category: 'kitchen', price: 44.00, description: 'Caldo de missô, porco desfiado, milho, manteiga' },

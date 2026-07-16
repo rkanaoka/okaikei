@@ -25,6 +25,15 @@ function txt(s: string) { return Buffer.from(s, 'latin1'); }
 function line(c = '-',  n = 32) { return txt(c.repeat(n) + '\n'); }
 function fmtBRL(v: number) { return `R$ ${v.toFixed(2).replace('.', ',')}`.padStart(9); }
 
+// Soma apenas os itens cujo produto está marcado para cobrar taxa de serviço —
+// mesma base usada em OrdersService para calcular a gorjeta compulsória
+function serviceFeeBase(items: any[]): number {
+  return (items ?? []).reduce((s: number, i: any) => {
+    const eligible = i.menuItem?.chargeServiceFee !== false;
+    return eligible ? s + Number(i.unitPrice) * i.quantity : s;
+  }, 0);
+}
+
 @Injectable()
 export class PrintingService {
   private readonly logger = new Logger(PrintingService.name);
@@ -65,9 +74,15 @@ export class PrintingService {
   async printOrderItems(comanda: any, items: any[]) {
     const byCategory: Record<string, any[]> = {};
     for (const item of items) {
-      const cat = item.menuItem?.category ?? item.category;
-      if (!byCategory[cat]) byCategory[cat] = [];
-      byCategory[cat].push(item);
+      // printCategories permite imprimir o mesmo item em mais de uma impressora;
+      // se vazio, cai no campo legado 'category' (uma única impressora)
+      const targets: string[] = item.menuItem?.printCategories?.length
+        ? item.menuItem.printCategories
+        : [item.menuItem?.category ?? item.category];
+      for (const cat of targets) {
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(item);
+      }
     }
 
     await Promise.allSettled(
@@ -112,6 +127,30 @@ export class PrintingService {
       await this.send(printer.ip, printer.port, fiscalTicket);
       this.logger.log(`Cupom fiscal impresso (${printer.ip})`);
     }
+  }
+
+  // ── Resumo da conta para conferência do cliente (não fecha/não é recibo) ──
+
+  async printSummary(comanda: any) {
+    const printer = await this.getPrinter('cashier');
+    if (!printer || !printer.enabled) {
+      throw new Error(`Impressora 'cashier' não configurada ou desativada`);
+    }
+    const ticket = this.buildSummaryTicket(comanda);
+    await this.send(printer.ip, printer.port, ticket);
+    this.logger.log(`Resumo de conferência impresso (${printer.ip})`);
+  }
+
+  // ── Comprovante de junção de comandas ──────────────────────────────────────
+
+  async printMergeReceipt(table: any, snapshot: any[], merged: any) {
+    const printer = await this.getPrinter('cashier');
+    if (!printer || !printer.enabled) {
+      throw new Error(`Impressora 'cashier' não configurada ou desativada`);
+    }
+    const ticket = this.buildMergeReceiptTicket(table, snapshot, merged);
+    await this.send(printer.ip, printer.port, ticket);
+    this.logger.log(`Comprovante de junção impresso (${printer.ip})`);
   }
 
   // ── Teste de conexão ──────────────────────────────────────────────────────
@@ -228,7 +267,7 @@ export class PrintingService {
 
     if (cfg.showTaxaServico && parseFloat(comanda.surchargeValue) > 0 && comanda.surchargeType) {
       const v = comanda.surchargeType === 'percent'
-        ? subtotal * parseFloat(comanda.surchargeValue) / 100
+        ? serviceFeeBase(items) * parseFloat(comanda.surchargeValue) / 100
         : parseFloat(comanda.surchargeValue);
       parts.push(txt(`${'Taxa de servico'.padEnd(23)}${fmtBRL(v)}\n`));
     }
@@ -273,6 +312,89 @@ export class PrintingService {
     );
     if (cfg.footerText) parts.push(txt(`${cfg.footerText}\n`));
     parts.push(CMD.LF, CMD.LF, cfg.cutMode === 'full' ? CMD.CUT_FULL : CMD.CUT_PARTIAL);
+    return Buffer.concat(parts);
+  }
+
+  private buildSummaryTicket(comanda: any): Buffer {
+    const now      = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const items    = comanda.items ?? [];
+    const subtotal = items.reduce((s: number, i: any) => s + Number(i.unitPrice) * i.quantity, 0);
+
+    const feeBase = serviceFeeBase(items);
+    let total = subtotal;
+    const sv = Number(comanda.surchargeValue ?? 0);
+    const dv = Number(comanda.discountValue  ?? 0);
+    if (sv > 0 && comanda.surchargeType) total += comanda.surchargeType === 'percent' ? feeBase * sv / 100 : sv;
+    if (dv > 0 && comanda.discountType)  total -= comanda.discountType  === 'percent' ? subtotal * dv / 100 : dv;
+
+    const parts: Buffer[] = [
+      CMD.INIT, CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_HEIGHT,
+      txt(`BODOGAMI\n`), CMD.NORMAL_SIZE, CMD.BOLD_OFF,
+      txt(`RESUMO PARA CONFERENCIA\n`), line('='),
+      CMD.ALIGN_LEFT,
+      txt(`Mesa: ${comanda.table?.label ?? '-'}\n`),
+    ];
+    if (comanda.customerName) parts.push(txt(`Cliente: ${comanda.customerName}\n`));
+    parts.push(txt(`Comanda: #${comanda.number}   ${now}\n`), line('-'));
+
+    for (const item of items) {
+      const name  = (item.menuItem?.name ?? item.name ?? '').slice(0, 20).padEnd(20);
+      const qty   = `${item.quantity}x`.padStart(3);
+      const price = fmtBRL(Number(item.unitPrice) * item.quantity);
+      parts.push(txt(`${qty} ${name} ${price}\n`));
+    }
+    parts.push(line('-'), txt(`${'Subtotal'.padEnd(23)}${fmtBRL(subtotal)}\n`));
+
+    if (sv > 0 && comanda.surchargeType) {
+      const v = comanda.surchargeType === 'percent' ? feeBase * sv / 100 : sv;
+      parts.push(txt(`${'Taxa de servico'.padEnd(23)}${fmtBRL(v)}\n`));
+    }
+    if (dv > 0 && comanda.discountType) {
+      const v = comanda.discountType === 'percent' ? subtotal * dv / 100 : dv;
+      parts.push(txt(`${'Desconto'.padEnd(23)}-${fmtBRL(v).trim()}\n`));
+    }
+
+    parts.push(
+      line('='), CMD.BOLD_ON, txt(`${'TOTAL PARCIAL'.padEnd(23)}${fmtBRL(total)}\n`), CMD.BOLD_OFF,
+      line('='), CMD.ALIGN_CENTER,
+      txt(`Documento sem valor fiscal\n`), txt(`Apenas para conferencia\n`),
+      CMD.LF, CMD.LF, CMD.CUT_PARTIAL,
+    );
+    return Buffer.concat(parts);
+  }
+
+  private buildMergeReceiptTicket(table: any, snapshot: any[], merged: any): Buffer {
+    const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const parts: Buffer[] = [
+      CMD.INIT, CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_HEIGHT,
+      txt(`BODOGAMI\n`), CMD.NORMAL_SIZE, CMD.BOLD_OFF,
+      txt(`COMPROVANTE DE JUNCAO\n`), line('='),
+      CMD.ALIGN_LEFT,
+      txt(`Mesa: ${table?.label ?? '-'}\n`),
+      txt(`${now}\n`), line('-'),
+    ];
+
+    for (const c of snapshot) {
+      parts.push(
+        CMD.BOLD_ON,
+        txt(`Comanda #${c.number}${c.customerName ? ' - ' + c.customerName : ''}\n`),
+        CMD.BOLD_OFF,
+      );
+      for (const item of c.items) {
+        parts.push(txt(`  ${item.quantity}x  ${item.name}\n`));
+        if (item.notes) parts.push(txt(`      >> ${item.notes}\n`));
+      }
+      parts.push(txt(`  Subtotal: ${fmtBRL(c.subtotal)}\n`), line('-'));
+    }
+
+    const mergedSubtotal = (merged.items ?? []).reduce((s: number, i: any) => s + Number(i.unitPrice) * i.quantity, 0);
+    parts.push(
+      CMD.BOLD_ON, txt(`Comandas unificadas em #${merged.number}\n`), CMD.BOLD_OFF,
+      txt(`Novo subtotal total: ${fmtBRL(mergedSubtotal)}\n`),
+      line('='), CMD.ALIGN_CENTER,
+      txt(`Comprovante interno - sem valor fiscal\n`),
+      CMD.LF, CMD.LF, CMD.CUT_PARTIAL,
+    );
     return Buffer.concat(parts);
   }
 }

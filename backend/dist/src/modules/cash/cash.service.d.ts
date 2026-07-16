@@ -3,6 +3,11 @@ import { CashMovementType } from '@prisma/client';
 export declare class CashService {
     private readonly prisma;
     constructor(prisma: PrismaService);
+    list(dto: {
+        from?: string;
+        to?: string;
+    }): Promise<any[]>;
+    private withDivergence;
     getCurrent(): Promise<{
         session: {
             id: string;

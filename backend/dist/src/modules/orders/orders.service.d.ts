@@ -37,6 +37,20 @@ export declare class OrdersService {
         reasonId: string;
         password: string;
     }): Promise<any>;
+    transferItems(sourceComandaId: string, dto: {
+        itemIds: string[];
+        targetComandaId: string;
+    }): Promise<{
+        source: any;
+        target: any;
+    }>;
+    changeTable(comandaId: string, dto: {
+        tableId: string;
+    }): Promise<any>;
+    printSummary(comandaId: string): Promise<{
+        ok: boolean;
+    }>;
+    mergeTableComandas(tableId: string): Promise<any>;
     closeComanda(comandaId: string, dto: {
         surchargeType?: string;
         surchargeValue?: number;
@@ -63,5 +77,6 @@ export declare class OrdersService {
         subtotal: number;
         total: number;
     }>;
+    private serviceFeeBase;
     private enrichComanda;
 }

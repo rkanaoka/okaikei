@@ -1,10 +1,15 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
 import { CashService } from './cash.service';
 import { CashMovementType } from '@prisma/client';
 
 @Controller('cash')
 export class CashController {
   constructor(private readonly cash: CashService) {}
+
+  @Get()
+  list(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.cash.list({ from, to });
+  }
 
   @Get('current')
   current() {

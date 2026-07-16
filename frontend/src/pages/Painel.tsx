@@ -15,6 +15,21 @@ const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   CLOSED:    { label:'Fechada',   color: BRAND.green,  bg:'#2DC65318' },
 };
 
+// Ordena "Mesa 2" antes de "Mesa 10" (numérico), com fallback alfabético para o resto
+function naturalCompare(a: string, b: string) {
+  const pa = a.match(/(\d+)|(\D+)/g) ?? [];
+  const pb = b.match(/(\d+)|(\D+)/g) ?? [];
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] ?? '', y = pb[i] ?? '';
+    if (x === y) continue;
+    const nx = parseInt(x, 10), ny = parseInt(y, 10);
+    if (!isNaN(nx) && !isNaN(ny)) return nx - ny;
+    return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
 function groupByTable(comandas: any[]) {
   const map = new Map<string, any[]>();
   for (const c of comandas) {
@@ -22,7 +37,21 @@ function groupByTable(comandas: any[]) {
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(c);
   }
-  return [...map.entries()];
+  return [...map.entries()].sort((a, b) => naturalCompare(a[0], b[0]));
+}
+
+// Total da comanda já contando a gorjeta compulsória de 10% mesmo quando ainda
+// não foi persistida no banco (só é gravada no fechamento da conta)
+function comandaTotalWithGratuity(c: any) {
+  const subtotal = c.subtotal ?? (c.items?.reduce((s:any,i:any)=>s+i.quantity*parseFloat(i.unitPrice),0) ?? 0);
+  if (c.surchargeType) {
+    const sv = parseFloat(c.surchargeValue) || 0;
+    const surcharge = c.surchargeType === 'percent' ? subtotal * sv / 100 : sv;
+    const dv = parseFloat(c.discountValue) || 0;
+    const discount = c.discountType === 'percent' ? subtotal * dv / 100 : dv;
+    return Math.max(0, subtotal + surcharge - discount);
+  }
+  return subtotal * 1.10;
 }
 
 const FILTERS = [
@@ -80,6 +109,7 @@ export default function Painel() {
   const [loading, setLoading]   = useState(true);
   const [lastUpdate, setLast]   = useState<Date|null>(null);
   const [syncStatus, setSyncStatus] = useState<any>(null);
+  const [merging, setMerging]   = useState<string | null>(null);
 
   useJoinRoom('dashboard');
 
@@ -87,7 +117,7 @@ export default function Painel() {
     try {
       const status = (filter === 'active' || filter === '') ? undefined : filter;
       let data: any = await comandasApi.list(status);
-      if (filter === 'active') data = data.filter((c:any) => c.status !== 'CLOSED');
+      if (filter === 'active') data = data.filter((c:any) => c.status !== 'CLOSED' && c.status !== 'CANCELLED');
       setComandas(data);
       setLast(new Date());
     } catch (e) { console.error(e); }
@@ -101,6 +131,22 @@ export default function Painel() {
     const t = setInterval(() => syncApi.status().then(setSyncStatus).catch(()=>{}), 30000);
     return () => clearInterval(t);
   }, []);
+
+  async function handleMerge(tableLabel: string, list: any[]) {
+    if (list.length < 2) return;
+    const tableId = list[0].tableId ?? list[0].table?.id;
+    if (!tableId) { alert('Não foi possível identificar a mesa.'); return; }
+    if (!window.confirm(`Juntar as ${list.length} comandas da mesa ${tableLabel} em uma só? Um comprovante será impresso no caixa.`)) return;
+    setMerging(tableLabel);
+    try {
+      await comandasApi.mergeTable(tableId);
+      await load();
+    } catch (e:any) {
+      alert(e.message);
+    } finally {
+      setMerging(null);
+    }
+  }
 
   // Atualizações em tempo real via WebSocket
   useSocketEvent(WS_EVENTS.COMANDA_CREATED, () => load());
@@ -166,17 +212,26 @@ export default function Painel() {
           </div>
         ) : filter === 'active' ? (
           <div className="table-groups">
-            {groupByTable(comandas).map(([table, list]) => (
-              <div key={table} className="table-group">
-                <div className="table-group-header">
-                  <span>{table}</span>
-                  <span className="table-group-count">{list.length}</span>
+            {groupByTable(comandas).map(([table, list]) => {
+              const groupTotal = list.reduce((s, c) => s + comandaTotalWithGratuity(c), 0);
+              return (
+                <div key={table} className="table-group">
+                  <div className="table-group-header">
+                    <span>{table}</span>
+                    <span className="table-group-count">{list.length}</span>
+                    <span className="table-group-total">{fmtBRL(groupTotal)}</span>
+                    {list.length > 1 && (
+                      <button className="merge-btn" onClick={() => handleMerge(table, list)} disabled={merging === table}>
+                        {merging === table ? 'Juntando…' : '🔗 Juntar Comandas'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid">
+                    {list.map(c => <ComandaCard key={c.id} comanda={c} showTable={false} />)}
+                  </div>
                 </div>
-                <div className="grid">
-                  {list.map(c => <ComandaCard key={c.id} comanda={c} showTable={false} />)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="grid">{comandas.map(c => <ComandaCard key={c.id} comanda={c} />)}</div>
@@ -210,6 +265,9 @@ export default function Painel() {
         .table-group-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding-left:2px; }
         .table-group-header span:first-child { font-size:17px; font-weight:900; color:var(--navy); }
         .table-group-count { font-size:12px; font-weight:700; color:#fff; background:var(--orange); padding:2px 9px; border-radius:999px; }
+        .table-group-total { font-size:13px; font-weight:800; color:var(--navy); background:#fff; border:1.5px solid ${BRAND.navy}25; padding:3px 12px; border-radius:999px; }
+        .merge-btn { margin-left:auto; padding:6px 14px; border-radius:999px; border:none; background:var(--navy); color:var(--yellow); font-weight:700; font-size:12px; cursor:pointer; font-family:inherit; }
+        .merge-btn:disabled { opacity:.5; cursor:not-allowed; }
         .comanda-card { background:#fff; border:2px solid var(--navy); border-left:5px solid; border-radius:16px; padding:18px 16px; cursor:pointer; transition:transform .12s; box-shadow:3px 3px 0 ${BRAND.navy}15; }
         .comanda-card:hover { transform:translateY(-2px); }
         .card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; }

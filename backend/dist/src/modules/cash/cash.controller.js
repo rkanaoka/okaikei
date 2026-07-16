@@ -19,6 +19,9 @@ let CashController = class CashController {
     constructor(cash) {
         this.cash = cash;
     }
+    list(from, to) {
+        return this.cash.list({ from, to });
+    }
     current() {
         return this.cash.getCurrent();
     }
@@ -36,6 +39,14 @@ let CashController = class CashController {
     }
 };
 exports.CashController = CashController;
+__decorate([
+    (0, common_1.Get)(),
+    __param(0, (0, common_1.Query)('from')),
+    __param(1, (0, common_1.Query)('to')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", void 0)
+], CashController.prototype, "list", null);
 __decorate([
     (0, common_1.Get)('current'),
     __metadata("design:type", Function),

@@ -18,6 +18,35 @@ let CashService = class CashService {
     constructor(prisma) {
         this.prisma = prisma;
     }
+    async list(dto) {
+        const where = {};
+        if (dto.from || dto.to) {
+            where.openedAt = {};
+            if (dto.from)
+                where.openedAt.gte = new Date(dto.from);
+            if (dto.to)
+                where.openedAt.lte = new Date(`${dto.to}T23:59:59.999`);
+        }
+        const sessions = await this.prisma.cashSession.findMany({ where, orderBy: { openedAt: 'desc' } });
+        return Promise.all(sessions.map((s) => this.withDivergence(s)));
+    }
+    async withDivergence(session) {
+        if (session.status !== 'CLOSED')
+            return { ...session, divergence: null };
+        const summary = await this.getSummary(session.id);
+        const counts = session.closingCounts ?? {};
+        let hasDivergence = false;
+        let total = 0;
+        const methods = summary.methods.map((m) => {
+            const emCaixa = Number(counts[m.method] ?? 0);
+            const diff = emCaixa - m.esperado;
+            if (Math.abs(diff) > 0.01)
+                hasDivergence = true;
+            total += diff;
+            return { method: m.method, esperado: m.esperado, emCaixa, diff };
+        });
+        return { ...session, divergence: { hasDivergence, total, methods } };
+    }
     async getCurrent() {
         const session = await this.prisma.cashSession.findFirst({
             where: { status: 'OPEN' },

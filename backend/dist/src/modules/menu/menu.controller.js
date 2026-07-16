@@ -19,6 +19,15 @@ let MenuController = class MenuController {
     constructor(menu) {
         this.menu = menu;
     }
+    findAllCategories() {
+        return this.menu.findAllCategories();
+    }
+    createCategory(body) {
+        return this.menu.createCategory(body);
+    }
+    updateCategory(id, body) {
+        return this.menu.updateCategory(id, body);
+    }
     findAll(all) {
         return this.menu.findAll(all === 'true');
     }
@@ -36,6 +45,27 @@ let MenuController = class MenuController {
     }
 };
 exports.MenuController = MenuController;
+__decorate([
+    (0, common_1.Get)('categories'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], MenuController.prototype, "findAllCategories", null);
+__decorate([
+    (0, common_1.Post)('categories'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], MenuController.prototype, "createCategory", null);
+__decorate([
+    (0, common_1.Put)('categories/:id'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], MenuController.prototype, "updateCategory", null);
 __decorate([
     (0, common_1.Get)(),
     __param(0, (0, common_1.Query)('all')),

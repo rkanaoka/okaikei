@@ -60,6 +60,17 @@ async function main() {
 
   console.log(`  ✓ Tables: ${tableLabels.length} created`);
 
+  // ── Categorias do Cardápio ───────────────────────────────────────────────────
+  const categoryNames = ['Prato Principal', 'Para Compartilhar', 'Lanches', 'Refrigerantes', 'Cervejas', 'Drinks Alcoólicos'];
+  const existingCategoryNames = (await prisma.menuCategory.findMany({ select: { name: true } })).map(c => c.name);
+  const categoriesToInsert = categoryNames.filter(n => !existingCategoryNames.includes(n));
+  if (categoriesToInsert.length > 0) {
+    await prisma.menuCategory.createMany({
+      data: categoriesToInsert.map((name) => ({ id: uuidv7(), name, sortOrder: categoryNames.indexOf(name) })),
+    });
+  }
+  console.log(`  ✓ Categorias do cardápio: ${categoryNames.length} (${categoriesToInsert.length} inseridas)`);
+
   // ── Menu ───────────────────────────────────────────────────────────────────
   const menuItems = [
     // Kitchen

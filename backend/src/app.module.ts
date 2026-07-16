@@ -17,6 +17,8 @@ import { ConfigsModule }  from './modules/config/config.module';
 import { CashModule }     from './modules/cash/cash.module';
 import { ReasonsModule }  from './modules/reasons/reasons.module';
 import { PrintTemplatesModule } from './modules/print-templates/print-templates.module';
+import { OptionGroupsModule } from './modules/option-groups/option-groups.module';
+import { VouchersModule } from './modules/vouchers/vouchers.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { PrintTemplatesModule } from './modules/print-templates/print-templates.
     CashModule,
     ReasonsModule,
     PrintTemplatesModule,
+    OptionGroupsModule,
+    VouchersModule,
   ],
 })
 export class AppModule {}

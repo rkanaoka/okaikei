@@ -200,6 +200,180 @@ export class OrdersService {
     return enriched;
   }
 
+  // ── Transferência de itens entre comandas ────────────────────────────────
+
+  async transferItems(sourceComandaId: string, dto: { itemIds: string[]; targetComandaId: string }) {
+    if (!dto.itemIds?.length) throw new BadRequestException('Selecione ao menos um item');
+    if (!dto.targetComandaId) throw new BadRequestException('Selecione a comanda de destino');
+    if (dto.targetComandaId === sourceComandaId) {
+      throw new BadRequestException('A comanda de destino deve ser diferente da atual');
+    }
+
+    const [source, target] = await Promise.all([
+      this.prisma.comanda.findUnique({ where: { id: sourceComandaId } }),
+      this.prisma.comanda.findUnique({ where: { id: dto.targetComandaId } }),
+    ]);
+    if (!source) throw new NotFoundException('Comanda de origem não encontrada');
+    if (!target) throw new NotFoundException('Comanda de destino não encontrada');
+    if (source.status === 'CLOSED' || source.status === 'CANCELLED') throw new BadRequestException('Comanda de origem encerrada');
+    if (target.status === 'CLOSED' || target.status === 'CANCELLED') throw new BadRequestException('Comanda de destino encerrada');
+
+    const items = await this.prisma.comandaItem.findMany({ where: { id: { in: dto.itemIds } } });
+    if (items.some((i) => i.comandaId !== sourceComandaId)) {
+      throw new BadRequestException('Um ou mais itens não pertencem à comanda de origem');
+    }
+
+    await this.prisma.comandaItem.updateMany({
+      where: { id: { in: dto.itemIds } },
+      data:  { comandaId: dto.targetComandaId },
+    });
+
+    const [updatedSource, updatedTarget] = await Promise.all([
+      this.prisma.comanda.findUnique({
+        where: { id: sourceComandaId },
+        include: { table: true, items: { include: { menuItem: true } }, payments: true },
+      }),
+      this.prisma.comanda.findUnique({
+        where: { id: dto.targetComandaId },
+        include: { table: true, items: { include: { menuItem: true } }, payments: true },
+      }),
+    ]);
+
+    const enrichedSource = this.enrichComanda(updatedSource);
+    const enrichedTarget = this.enrichComanda(updatedTarget);
+
+    this.nats.publish('comanda.items_transferred', { sourceComandaId, targetComandaId: dto.targetComandaId, itemIds: dto.itemIds });
+    this.gateway.emitComandaUpdated(enrichedSource);
+    this.gateway.emitComandaUpdated(enrichedTarget);
+    await this.sync.enqueue('comanda.items_transferred', 'Comanda', sourceComandaId, dto);
+
+    return { source: enrichedSource, target: enrichedTarget };
+  }
+
+  // ── Trocar a mesa de uma comanda ──────────────────────────────────────────
+
+  async changeTable(comandaId: string, dto: { tableId: string }) {
+    if (!dto.tableId) throw new BadRequestException('Selecione a mesa de destino');
+
+    const comanda = await this.prisma.comanda.findUnique({ where: { id: comandaId } });
+    if (!comanda) throw new NotFoundException('Comanda não encontrada');
+    if (comanda.status === 'CLOSED' || comanda.status === 'CANCELLED') {
+      throw new BadRequestException('Comanda encerrada');
+    }
+
+    const newTable = await this.prisma.table.findUnique({ where: { id: dto.tableId } });
+    if (!newTable) throw new NotFoundException('Mesa não encontrada');
+
+    const oldTableId = comanda.tableId;
+
+    const updatedComanda = await this.prisma.comanda.update({
+      where: { id: comandaId },
+      data:  { tableId: dto.tableId },
+      include: { table: true, items: { include: { menuItem: true } }, payments: true },
+    });
+
+    await this.prisma.table.update({ where: { id: dto.tableId }, data: { status: 'OCCUPIED' } });
+
+    if (oldTableId && oldTableId !== dto.tableId) {
+      const stillActive = await this.prisma.comanda.count({
+        where: { tableId: oldTableId, status: { in: ['OPEN', 'PREPARING'] } },
+      });
+      if (stillActive === 0) {
+        await this.prisma.table.update({ where: { id: oldTableId }, data: { status: 'FREE' } });
+      }
+    }
+    await this.redis.invalidateTables();
+
+    const enriched = this.enrichComanda(updatedComanda);
+    this.nats.publish('comanda.table_changed', { comandaId, oldTableId, tableId: dto.tableId });
+    this.gateway.emitComandaUpdated(enriched);
+    await this.sync.enqueue('comanda.table_changed', 'Comanda', comandaId, dto);
+
+    return enriched;
+  }
+
+  // ── Resumo para conferência do cliente (não fecha a comanda) ─────────────
+
+  async printSummary(comandaId: string) {
+    const comanda = await this.prisma.comanda.findUnique({
+      where:   { id: comandaId },
+      include: { table: true, items: { include: { menuItem: true } }, payments: true },
+    });
+    if (!comanda) throw new NotFoundException('Comanda não encontrada');
+
+    try {
+      await this.printing.printSummary(comanda);
+    } catch (e: any) {
+      throw new BadRequestException(`Falha ao imprimir resumo: ${e.message}`);
+    }
+    return { ok: true };
+  }
+
+  // ── Juntar todas as comandas ativas de uma mesa em uma só ────────────────
+
+  async mergeTableComandas(tableId: string) {
+    if (!tableId) throw new BadRequestException('Informe a mesa');
+
+    const comandas = await this.prisma.comanda.findMany({
+      where:   { tableId, status: { in: ['OPEN', 'PREPARING'] } },
+      include: { items: { include: { menuItem: true } }, table: true },
+      orderBy: { openedAt: 'asc' },
+    });
+    if (comandas.length < 2) {
+      throw new BadRequestException('É preciso ao menos 2 comandas ativas na mesa para juntar');
+    }
+
+    const [target, ...rest] = comandas;
+
+    // Snapshot para o comprovante impresso, antes de mover os itens
+    const snapshot = comandas.map((c) => ({
+      number:       c.number,
+      customerName: c.customerName,
+      items:        c.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity, unitPrice: i.unitPrice, notes: i.notes })),
+      subtotal:     c.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0),
+    }));
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const source of rest) {
+        await tx.comandaItem.updateMany({
+          where: { comandaId: source.id },
+          data:  { comandaId: target.id },
+        });
+        await tx.comanda.update({
+          where: { id: source.id },
+          data:  { status: 'CANCELLED', notes: `Itens transferidos para comanda #${target.number} (junção de mesa)` },
+        });
+      }
+      // Se o alvo não tiver nome de cliente, aproveita o de alguma das outras
+      if (!target.customerName) {
+        const withName = rest.find((c) => c.customerName);
+        if (withName) {
+          await tx.comanda.update({ where: { id: target.id }, data: { customerName: withName.customerName } });
+        }
+      }
+    });
+
+    const merged = await this.prisma.comanda.findUnique({
+      where:   { id: target.id },
+      include: { table: true, items: { include: { menuItem: true } }, payments: true },
+    });
+    const enriched = this.enrichComanda(merged);
+
+    // Comprovante da junção, impresso no caixa (não bloqueia)
+    this.printing.printMergeReceipt(target.table, snapshot, enriched).catch((err) =>
+      this.logger.warn(`Merge receipt print failed: ${err.message}`),
+    );
+
+    this.nats.publish('comanda.merged', { tableId, targetId: target.id, mergedIds: rest.map((c) => c.id) });
+    this.gateway.emitComandaUpdated(enriched);
+    for (const c of rest) {
+      this.gateway.emitComandaUpdated({ ...c, status: 'CANCELLED' });
+    }
+    await this.sync.enqueue('comanda.merged', 'Comanda', target.id, { tableId, mergedIds: rest.map((c) => c.id) });
+
+    return enriched;
+  }
+
   async closeComanda(comandaId: string, dto: {
     surchargeType?:  string;
     surchargeValue?: number;
@@ -218,12 +392,13 @@ export class OrdersService {
     const subtotal = comanda.items.reduce(
       (s, i) => s + Number(i.unitPrice) * i.quantity, 0,
     );
+    const serviceFeeBase = this.serviceFeeBase(comanda.items);
 
     let total = subtotal;
     const sv = dto.surchargeValue ?? 0;
     const dv = dto.discountValue  ?? 0;
     if (sv > 0 && dto.surchargeType) {
-      total += dto.surchargeType === 'percent' ? subtotal * sv / 100 : sv;
+      total += dto.surchargeType === 'percent' ? serviceFeeBase * sv / 100 : sv;
     }
     if (dv > 0 && dto.discountType) {
       total -= dto.discountType === 'percent' ? subtotal * dv / 100 : dv;
@@ -304,19 +479,29 @@ export class OrdersService {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
+  // Soma apenas os itens cujo produto está marcado para cobrar taxa de serviço
+  // (menuItem.chargeServiceFee !== false) — usada como base do percentual da gorjeta compulsória
+  private serviceFeeBase(items: any[]): number {
+    return (items ?? []).reduce((s: number, i: any) => {
+      const eligible = i.menuItem?.chargeServiceFee !== false;
+      return eligible ? s + Number(i.unitPrice) * i.quantity : s;
+    }, 0);
+  }
+
   private enrichComanda(comanda: any) {
     const subtotal = (comanda.items ?? []).reduce(
       (s: number, i: any) => s + Number(i.unitPrice) * i.quantity, 0,
     );
+    const serviceFeeBase = this.serviceFeeBase(comanda.items);
     let total = subtotal;
     const sv = Number(comanda.surchargeValue ?? 0);
     const dv = Number(comanda.discountValue  ?? 0);
     if (sv > 0 && comanda.surchargeType) {
-      total += comanda.surchargeType === 'percent' ? subtotal * sv / 100 : sv;
+      total += comanda.surchargeType === 'percent' ? serviceFeeBase * sv / 100 : sv;
     }
     if (dv > 0 && comanda.discountType) {
       total -= comanda.discountType === 'percent' ? subtotal * dv / 100 : dv;
     }
-    return { ...comanda, subtotal, total };
+    return { ...comanda, subtotal, total, serviceFeeBase };
   }
 }

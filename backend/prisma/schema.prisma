@@ -34,26 +34,80 @@ enum UserRole {
   KITCHEN
 }
 
+// ─── Categorias do Cardápio (organização/exibição) ────────────────────────────
+model MenuCategory {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name      String   @db.VarChar(60)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  items MenuItem[]
+
+  @@map("menu_categories")
+}
+
 // ─── Itens do Cardápio ────────────────────────────────────────────────────────
 model MenuItem {
   id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   name        String   @db.VarChar(120)
   description String?
   price       Decimal  @db.Decimal(10, 2)
-  // 'kitchen' | 'bar' | 'cashier' — roteamento para impressora
-  category    String   @db.VarChar(30)
-  subcategory String?  @db.VarChar(60)
+  // 'kitchen' | 'bar' | 'cashier' — categoria legada de impressão (fallback se printCategories vier vazio)
+  category        String   @db.VarChar(30)
+  subcategory     String?  @db.VarChar(60)
+  categoryId      String?  @map("category_id") @db.Uuid
+  printCategories String[] @default([]) @map("print_categories") // impressoras de destino: kitchen | bar | cashier (permite mais de uma)
   imageUrl    String?  @map("image_url")
   available   Boolean  @default(true)
   sortOrder   Int      @default(0) @map("sort_order")
+  // Se falso, o valor do item não entra na base de cálculo da taxa de serviço (gorjeta compulsória)
+  chargeServiceFee     Boolean @default(true) @map("charge_service_fee")
+  // { enabled, days:[0-6] (0=domingo), startTime:"HH:mm", endTime:"HH:mm" } — null/enabled=false = sempre disponível
+  availabilitySchedule Json?   @map("availability_schedule")
+  // ids de OptionGroup, na ordem de exibição escolhida para este item (a vinculação em si é o relation abaixo)
+  optionGroupOrder String[] @default([]) @map("option_group_order")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  menuCategory MenuCategory?  @relation(fields: [categoryId], references: [id])
   comandaItems ComandaItem[]
+  optionGroups OptionGroup[]  @relation("MenuItemOptionGroups")
 
   @@index([category])
   @@index([available])
+  @@index([categoryId])
   @@map("menu_items")
+}
+
+// ─── Grupos de Opções (personalização de itens, ex: "Escolha o sabor") ────────
+model OptionGroup {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name      String   @db.VarChar(150)
+  minSelect Int      @default(0) @map("min_select")
+  maxSelect Int      @default(1) @map("max_select")
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  options   MenuOption[]
+  menuItems MenuItem[]   @relation("MenuItemOptionGroups")
+
+  @@map("option_groups")
+}
+
+model MenuOption {
+  id        String  @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  groupId   String  @map("group_id") @db.Uuid
+  name      String  @db.VarChar(120)
+  price     Decimal @default(0) @db.Decimal(10, 2)
+  active    Boolean @default(true)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  group OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@map("menu_options")
 }
 
 // ─── Mesas ────────────────────────────────────────────────────────────────────
@@ -206,6 +260,34 @@ model DiscountReason {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("discount_reasons")
+}
+
+// ─── Vouchers (Cupons de Desconto) ─────────────────────────────────────────────
+model Voucher {
+  id                   String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  code                 String        @unique @db.VarChar(12)
+  confirmationPassword String        @map("confirmation_password") @db.VarChar(6)
+  customerName         String        @map("customer_name") @db.VarChar(100)
+  customerCpf          String        @map("customer_cpf") @db.VarChar(14)
+  customerBirthDate    DateTime      @map("customer_birth_date") @db.Date
+  customerAddress      String        @map("customer_address") @db.VarChar(200)
+  customerPhone        String        @map("customer_phone") @db.VarChar(20)
+  customerEmail        String        @map("customer_email") @db.VarChar(200)
+  amount               Decimal       @db.Decimal(10, 2)
+  status               VoucherStatus @default(NEGOTIATION)
+  dueDate              DateTime      @map("due_date") @db.Date
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  @@map("vouchers")
+}
+
+enum VoucherStatus {
+  NEGOTIATION
+  PAID
+  USED
+  CANCELLED
+  EXPIRED
 }
 
 // ─── Modelos de Impressão ─────────────────────────────────────────────────────

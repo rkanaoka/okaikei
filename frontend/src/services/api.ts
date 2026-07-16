@@ -23,10 +23,29 @@ http.interceptors.response.use(
 
 // ── Menu ─────────────────────────────────────────────────────────────────────
 export const menuApi = {
-  list:   ()       => http.get('/menu'),
-  create: (d: any) => http.post('/menu', d),
-  update: (id: string, d: any) => http.put(`/menu/${id}`, d),
-  remove: (id: string)         => http.delete(`/menu/${id}`),
+  list:    ()       => http.get('/menu'),
+  listAll: ()       => http.get('/menu', { params: { all: 'true' } }),
+  create:  (d: any) => http.post('/menu', d),
+  update:  (id: string, d: any) => http.put(`/menu/${id}`, d),
+  remove:  (id: string)         => http.delete(`/menu/${id}`),
+
+  categories: {
+    list:   () => http.get('/menu/categories'),
+    create: (d: { name: string; sortOrder?: number }) => http.post('/menu/categories', d),
+    update: (id: string, d: { name?: string; sortOrder?: number }) => http.put(`/menu/categories/${id}`, d),
+  },
+};
+
+// ── Grupos de Opções (personalização de itens) ─────────────────────────────────
+export const optionGroupsApi = {
+  list:   ()       => http.get('/option-groups'),
+  get:    (id: string) => http.get(`/option-groups/${id}`),
+  create: (d: any)     => http.post('/option-groups', d),
+  update: (id: string, d: any) => http.put(`/option-groups/${id}`, d),
+  remove: (id: string)         => http.delete(`/option-groups/${id}`),
+  setItems: (id: string, menuItemIds: string[]) => http.put(`/option-groups/${id}/items`, { menuItemIds }),
+  updateOption: (optionId: string, d: { name?: string; price?: number; active?: boolean }) =>
+    http.put(`/option-groups/options/${optionId}`, d),
 };
 
 // ── Tables ────────────────────────────────────────────────────────────────────
@@ -42,11 +61,20 @@ export const comandasApi = {
   open: (d: { tableId?: string; customerName?: string; notes?: string }) =>
     http.post('/comandas', d),
 
-  addItems: (id: string, items: Array<{ menuItemId: string; quantity: number; notes?: string }>) =>
-    http.post(`/comandas/${id}/items`, { items, print: true }),
+  addItems: (id: string, items: Array<{ menuItemId: string; quantity: number; notes?: string }>, print = true) =>
+    http.post(`/comandas/${id}/items`, { items, print }),
 
   removeItem: (id: string, itemId: string, d: { reasonId: string; password: string }) =>
     http.delete(`/comandas/${id}/items/${itemId}`, { data: d }),
+
+  transferItems: (id: string, d: { itemIds: string[]; targetComandaId: string }) =>
+    http.post(`/comandas/${id}/transfer-items`, d),
+
+  changeTable: (id: string, d: { tableId: string }) => http.put(`/comandas/${id}/table`, d),
+
+  mergeTable: (tableId: string) => http.post('/comandas/merge-table', { tableId }),
+
+  printSummary: (id: string) => http.post(`/comandas/${id}/print-summary`, {}),
 
   pay: (id: string, d: {
     surchargeType?: string; surchargeValue?: number;
@@ -58,6 +86,8 @@ export const comandasApi = {
 
 // ── Frente de Caixa ────────────────────────────────────────────────────────────
 export const cashApi = {
+  list: (d?: { from?: string; to?: string }) => http.get('/cash', { params: d }),
+
   current: () => http.get('/cash/current'),
 
   open: (d: { openingAmount: number; notes?: string }) => http.post('/cash/open', d),
@@ -82,6 +112,19 @@ export const reasonsApi = {
     list:   () => http.get('/reasons/discount'),
     create: (d: { label: string; type: 'percent'|'fixed'; value: number }) => http.post('/reasons/discount', d),
   },
+};
+
+// ── Vouchers (Cupons de Desconto) ──────────────────────────────────────────────
+export type VoucherInput = {
+  customerName: string; customerCpf: string; customerBirthDate: string;
+  customerAddress: string; customerPhone: string; customerEmail: string;
+  amount: number; dueDate: string; status?: string;
+};
+
+export const vouchersApi = {
+  list:   ()       => http.get('/vouchers'),
+  create: (d: VoucherInput) => http.post('/vouchers', d),
+  update: (id: string, d: Partial<VoucherInput>) => http.put(`/vouchers/${id}`, d),
 };
 
 // ── Modelos de Impressão ────────────────────────────────────────────────────────

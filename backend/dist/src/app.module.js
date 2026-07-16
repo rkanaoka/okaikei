@@ -24,6 +24,8 @@ const config_module_1 = require("./modules/config/config.module");
 const cash_module_1 = require("./modules/cash/cash.module");
 const reasons_module_1 = require("./modules/reasons/reasons.module");
 const print_templates_module_1 = require("./modules/print-templates/print-templates.module");
+const option_groups_module_1 = require("./modules/option-groups/option-groups.module");
+const vouchers_module_1 = require("./modules/vouchers/vouchers.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -46,6 +48,8 @@ exports.AppModule = AppModule = __decorate([
             cash_module_1.CashModule,
             reasons_module_1.ReasonsModule,
             print_templates_module_1.PrintTemplatesModule,
+            option_groups_module_1.OptionGroupsModule,
+            vouchers_module_1.VouchersModule,
         ],
     })
 ], AppModule);

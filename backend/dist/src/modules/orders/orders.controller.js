@@ -35,6 +35,18 @@ let OrdersController = class OrdersController {
     removeItem(id, itemId, body) {
         return this.orders.removeItem(id, itemId, body);
     }
+    transferItems(id, body) {
+        return this.orders.transferItems(id, body);
+    }
+    changeTable(id, body) {
+        return this.orders.changeTable(id, body);
+    }
+    printSummary(id) {
+        return this.orders.printSummary(id);
+    }
+    mergeTable(body) {
+        return this.orders.mergeTableComandas(body.tableId);
+    }
     close(id, body) {
         return this.orders.closeComanda(id, body);
     }
@@ -80,6 +92,39 @@ __decorate([
     __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "removeItem", null);
+__decorate([
+    (0, common_1.Post)(':id/transfer-items'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "transferItems", null);
+__decorate([
+    (0, common_1.Put)(':id/table'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "changeTable", null);
+__decorate([
+    (0, common_1.Post)(':id/print-summary'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "printSummary", null);
+__decorate([
+    (0, common_1.Post)('merge-table'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "mergeTable", null);
 __decorate([
     (0, common_1.Post)(':id/pay'),
     (0, common_1.HttpCode)(200),
