@@ -15,6 +15,20 @@ const prisma_service_1 = require("../../common/prisma/prisma.service");
 const redis_service_1 = require("../../common/redis/redis.service");
 const sync_service_1 = require("../sync/sync.service");
 const uuidv7_1 = require("uuidv7");
+const OPTION_GROUPS_INCLUDE = {
+    optionGroups: {
+        where: { active: true },
+        include: { options: { where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] } },
+    },
+};
+function orderGroups(groups, order) {
+    if (!order?.length)
+        return groups;
+    const byId = new Map(groups.map((g) => [g.id, g]));
+    const ordered = order.filter((id) => byId.has(id)).map((id) => byId.get(id));
+    const rest = groups.filter((g) => !order.includes(g.id));
+    return [...ordered, ...rest];
+}
 function isWithinSchedule(schedule) {
     if (!schedule?.enabled)
         return true;
@@ -41,19 +55,23 @@ let MenuService = class MenuService {
             return cached;
         const items = await this.prisma.menuItem.findMany({
             where: includeUnavailable ? {} : { available: true },
-            include: { menuCategory: true },
+            include: { menuCategory: true, ...OPTION_GROUPS_INCLUDE },
             orderBy: [{ menuCategory: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { name: 'asc' }],
         });
-        const visible = includeUnavailable ? items : items.filter((i) => isWithinSchedule(i.availabilitySchedule));
+        const withOrderedGroups = items.map((i) => ({ ...i, optionGroups: orderGroups(i.optionGroups, i.optionGroupOrder) }));
+        const visible = includeUnavailable ? withOrderedGroups : withOrderedGroups.filter((i) => isWithinSchedule(i.availabilitySchedule));
         if (!includeUnavailable)
             await this.redis.cacheMenu(visible);
         return visible;
     }
     async findOne(id) {
-        const item = await this.prisma.menuItem.findUnique({ where: { id }, include: { menuCategory: true } });
+        const item = await this.prisma.menuItem.findUnique({
+            where: { id },
+            include: { menuCategory: true, ...OPTION_GROUPS_INCLUDE },
+        });
         if (!item)
             throw new common_1.NotFoundException(`Item ${id} não encontrado`);
-        return item;
+        return { ...item, optionGroups: orderGroups(item.optionGroups, item.optionGroupOrder) };
     }
     async create(dto) {
         const { optionGroupIds, ...rest } = dto;

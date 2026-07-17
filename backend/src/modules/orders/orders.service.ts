@@ -379,6 +379,7 @@ export class OrdersService {
     surchargeValue?: number;
     discountType?:   string;
     discountValue?:  number;
+    voucherId?:      string;
     payments: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
     printReceipt?: boolean;
   }) {
@@ -394,6 +395,16 @@ export class OrdersService {
     );
     const serviceFeeBase = this.serviceFeeBase(comanda.items);
 
+    // Voucher é revalidado no servidor — nunca confia no valor calculado pelo cliente
+    let voucher: { id: string; code: string; amount: any } | null = null;
+    let voucherDiscount = 0;
+    if (dto.voucherId) {
+      voucher = await this.prisma.voucher.findUnique({ where: { id: dto.voucherId } });
+      if (!voucher) throw new BadRequestException('Voucher não encontrado');
+      if ((voucher as any).status !== 'PAID') throw new BadRequestException('Voucher não está disponível para uso');
+      voucherDiscount = Math.min(subtotal, Number(voucher.amount));
+    }
+
     let total = subtotal;
     const sv = dto.surchargeValue ?? 0;
     const dv = dto.discountValue  ?? 0;
@@ -403,6 +414,8 @@ export class OrdersService {
     if (dv > 0 && dto.discountType) {
       total -= dto.discountType === 'percent' ? subtotal * dv / 100 : dv;
     }
+    if (voucherDiscount > 0) total -= voucherDiscount;
+    total = Math.max(0, total);
 
     const paid = dto.payments.reduce((s, p) => s + p.amount, 0);
     if (Math.abs(paid - total) > 0.01) {
@@ -414,8 +427,17 @@ export class OrdersService {
     // Pagamentos são atribuídos ao caixa aberto no momento, se houver um
     const openCashSession = await this.prisma.cashSession.findFirst({ where: { status: 'OPEN' } });
 
-    // Transação atômica: fechar comanda + inserir pagamentos
+    // Transação atômica: fechar comanda + inserir pagamentos + consumir o voucher
     const [closedComanda, insertedPayments] = await this.prisma.$transaction(async (tx) => {
+      if (voucher) {
+        // updateMany com where status:'PAID' garante atomicidade contra uso duplicado concorrente
+        const consumed = await tx.voucher.updateMany({
+          where: { id: voucher.id, status: 'PAID' },
+          data:  { status: 'USED', comandaId },
+        });
+        if (consumed.count === 0) throw new BadRequestException('Voucher não está mais disponível para uso');
+      }
+
       const closed = await tx.comanda.update({
         where: { id: comandaId },
         data: {
@@ -425,6 +447,8 @@ export class OrdersService {
           surchargeValue: dto.surchargeValue ?? 0,
           discountType:   dto.discountType   ?? null,
           discountValue:  dto.discountValue  ?? 0,
+          voucherCode:     voucher?.code ?? null,
+          voucherDiscount,
         },
         include: { table: true, items: { include: { menuItem: true } }, payments: true },
       });
@@ -496,12 +520,15 @@ export class OrdersService {
     let total = subtotal;
     const sv = Number(comanda.surchargeValue ?? 0);
     const dv = Number(comanda.discountValue  ?? 0);
+    const vv = Number(comanda.voucherDiscount ?? 0);
     if (sv > 0 && comanda.surchargeType) {
       total += comanda.surchargeType === 'percent' ? serviceFeeBase * sv / 100 : sv;
     }
     if (dv > 0 && comanda.discountType) {
       total -= comanda.discountType === 'percent' ? subtotal * dv / 100 : dv;
     }
+    if (vv > 0) total -= vv;
+    total = Math.max(0, total);
     return { ...comanda, subtotal, total, serviceFeeBase };
   }
 }

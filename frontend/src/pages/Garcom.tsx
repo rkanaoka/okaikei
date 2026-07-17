@@ -193,6 +193,10 @@ function AddItems({ comanda, onClose }:any) {
   const [sending, setSending] = useState(false);
   const [toast, setToast]     = useState<any>(null);
 
+  // Opções vinculadas ao item (ex: ponto da carne, adicionais)
+  const [optionsTarget, setOptionsTarget]       = useState<any>(null);
+  const [optionSelections, setOptionSelections] = useState<Record<string,string[]>>({});
+
   useEffect(() => { menuApi.list().then((d:any) => setItems(d.filter((i:any)=>i.available))); }, []);
 
   const cats    = [...new Set(items.map((i:any) => i.category))];
@@ -201,11 +205,51 @@ function AddItems({ comanda, onClose }:any) {
   const catLabel: Record<string,string> = { kitchen:'🍱 Cozinha', bar:'🍺 Bar', cashier:'💰 Caixa' };
 
   function addToCart(item: any) {
+    if (item.optionGroups?.length) { openOptions(item); return; }
+    addToCartWithNotes(item, '');
+  }
+  function addToCartWithNotes(item: any, notes: string) {
     setCart(prev => {
-      const idx = prev.findIndex(c => c.item.id === item.id);
+      const idx = prev.findIndex(c => c.item.id === item.id && (c.notes || '') === (notes || ''));
       if (idx >= 0) { const n=[...prev]; n[idx]={...n[idx],qty:n[idx].qty+1}; return n; }
-      return [...prev, { item, qty:1, notes:'' }];
+      return [...prev, { item, qty:1, notes: notes || '' }];
     });
+  }
+
+  // ── Opções vinculadas ao item ────────────────────────────────────────────
+
+  function openOptions(item: any) {
+    setOptionsTarget(item);
+    const initial: Record<string,string[]> = {};
+    (item.optionGroups ?? []).forEach((g:any) => { initial[g.id] = []; });
+    setOptionSelections(initial);
+  }
+
+  function toggleOption(groupId: string, optionId: string, maxSelect: number) {
+    setOptionSelections(prev => {
+      const current = prev[groupId] ?? [];
+      if (current.includes(optionId)) return { ...prev, [groupId]: current.filter(i => i !== optionId) };
+      if (maxSelect === 1) return { ...prev, [groupId]: [optionId] };
+      if (current.length >= maxSelect) return prev;
+      return { ...prev, [groupId]: [...current, optionId] };
+    });
+  }
+
+  function optionsValid(item: any) {
+    return (item.optionGroups ?? []).every((g:any) => (optionSelections[g.id]?.length ?? 0) >= g.minSelect);
+  }
+
+  function confirmOptions() {
+    if (!optionsTarget) return;
+    const parts: string[] = [];
+    for (const g of optionsTarget.optionGroups ?? []) {
+      const selectedIds = optionSelections[g.id] ?? [];
+      if (!selectedIds.length) continue;
+      const names = selectedIds.map((oid:string) => g.options.find((o:any) => o.id === oid)?.name).filter(Boolean);
+      if (names.length) parts.push(`${g.name}: ${names.join(', ')}`);
+    }
+    addToCartWithNotes(optionsTarget, parts.join('; '));
+    setOptionsTarget(null);
   }
 
   async function send() {
@@ -286,6 +330,51 @@ function AddItems({ comanda, onClose }:any) {
             <PillBtn onClick={send} disabled={sending}>
               {sending ? 'Enviando…' : `Enviar (${cart.reduce((s,c)=>s+c.qty,0)} itens)`}
             </PillBtn>
+          </div>
+        </div>
+      )}
+
+      {/* Opções vinculadas ao item */}
+      {optionsTarget && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(13,27,42,.85)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:200 }}
+          onClick={e=>{ if (e.target === e.currentTarget) setOptionsTarget(null); }}>
+          <div style={{ background:BRAND.cream, borderRadius:'20px 20px 0 0', padding:'28px 24px', width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto', borderTop:`3px solid ${BRAND.navy}` }} onClick={e=>e.stopPropagation()}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <h3 style={{ fontSize:18, fontWeight:900, color:BRAND.navy, margin:0 }}>{optionsTarget.name}</h3>
+              <button onClick={()=>setOptionsTarget(null)} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:BRAND.navy }}>✕</button>
+            </div>
+
+            {(optionsTarget.optionGroups ?? []).map((g:any) => {
+              const selected = optionSelections[g.id] ?? [];
+              return (
+                <div key={g.id} style={{ marginBottom:18 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:BRAND.navy }}>
+                    {g.name}{g.minSelect > 0 && <span style={{ color:BRAND.red }}> *</span>}
+                  </div>
+                  <div style={{ fontSize:11, color:BRAND.navyLight, opacity:.7, marginBottom:8 }}>
+                    {g.minSelect === g.maxSelect ? `Escolha ${g.minSelect}` : `Escolha até ${g.maxSelect}`}
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                    {g.options.map((o:any) => {
+                      const isSel = selected.includes(o.id);
+                      const atCap = !isSel && g.maxSelect > 1 && selected.length >= g.maxSelect;
+                      return (
+                        <button key={o.id} onClick={()=>toggleOption(g.id, o.id, g.maxSelect)} disabled={atCap} style={{
+                          padding:'8px 14px', borderRadius:999, border:`2px solid ${isSel ? BRAND.orange : '#ddd'}`,
+                          background: isSel ? BRAND.orange : '#fff', color: isSel ? '#fff' : BRAND.navy,
+                          fontWeight:700, fontSize:13, cursor: atCap ? 'default' : 'pointer', fontFamily:'inherit',
+                          opacity: atCap ? .4 : 1,
+                        }}>
+                          {o.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            <PillBtn onClick={confirmOptions} disabled={!optionsValid(optionsTarget)}>Adicionar</PillBtn>
           </div>
         </div>
       )}

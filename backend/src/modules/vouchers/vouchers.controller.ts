@@ -10,6 +10,16 @@ export class VouchersController {
     return this.vouchers.list();
   }
 
+  @Get('by-code/:code')
+  findByCode(@Param('code') code: string) {
+    return this.vouchers.findByCode(code);
+  }
+
+  @Post(':id/confirm')
+  confirm(@Param('id') id: string, @Body() body: { password: string }) {
+    return this.vouchers.confirmForUse(id, body.password);
+  }
+
   @Post()
   create(@Body() body: {
     customerName: string; customerCpf: string; customerBirthDate: string;

@@ -47,6 +47,7 @@ export declare class OrdersController {
         surchargeValue?: number;
         discountType?: string;
         discountValue?: number;
+        voucherId?: string;
         payments: Array<{
             method: PaymentMethod;
             amount: number;
@@ -57,8 +58,8 @@ export declare class OrdersController {
         comanda: any;
         payments: {
             id: string;
-            createdAt: Date;
             notes: string | null;
+            createdAt: Date;
             comandaId: string;
             method: import(".prisma/client").$Enums.PaymentMethod;
             amount: import("@prisma/client/runtime/library").Decimal;

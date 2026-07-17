@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { comandasApi, reasonsApi, menuApi, tablesApi } from '@/services/api';
+import { comandasApi, reasonsApi, menuApi, tablesApi, vouchersApi } from '@/services/api';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653', navyLight:'#1A2E44', cream:'#FFF8F0' };
 const fmtBRL = (v:any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
@@ -82,6 +82,10 @@ const STATUS_CFG: Record<string,{label:string;color:string;bg:string}> = {
   CANCELLED: { label:'Cancelada', color:BRAND.red,    bg:'#E6394618' },
 };
 
+const VOUCHER_STATUS_LABELS: Record<string,string> = {
+  NEGOTIATION:'Negociação', PAID:'Pago', USED:'Usado', CANCELLED:'Cancelado', EXPIRED:'Vencido',
+};
+
 const ITEM_STATUS_CFG: Record<string,{label:string;color:string}> = {
   PENDING:   { label:'Pendente',  color:'#aaa' },
   SENT:      { label:'Enviado',   color:BRAND.orange },
@@ -102,6 +106,16 @@ export default function Caixa() {
   const [discount,  setDiscount]  = useState<{ type: 'percent'|'fixed'; value: string }>({ type:'fixed', value:'0' });
   const [discountReasonId, setDiscountReasonId] = useState('');
   const [discountReasons,  setDiscountReasons]  = useState<any[]>([]);
+
+  // Voucher (cupom de desconto)
+  const [voucherCode, setVoucherCode]                 = useState('');
+  const [voucherLookup, setVoucherLookup]             = useState<any>(null);
+  const [voucherLookupError, setVoucherLookupError]   = useState('');
+  const [voucherLookupLoading, setVoucherLookupLoading] = useState(false);
+  const [voucherPassword, setVoucherPassword]         = useState('');
+  const [voucherConfirmError, setVoucherConfirmError] = useState('');
+  const [voucherConfirming, setVoucherConfirming]     = useState(false);
+  const [appliedVoucher, setAppliedVoucher]           = useState<any>(null);
   // Gorjeta compulsória de 10% aplicada por padrão; caixa pode remover ou editar (% ou R$)
   const [surcharge, setSurcharge] = useState<{ type: 'percent'|'fixed'|''; value: string }>({ type:'percent', value:'10' });
   const [payments,  setPayments]  = useState<Payment[]>([{ method:'CASH', amount:'' }]);
@@ -121,10 +135,14 @@ export default function Caixa() {
   const [showAddItems, setShowAddItems]     = useState(false);
   const [menuItems, setMenuItems]           = useState<any[]>([]);
   const [addCat, setAddCat]                 = useState<string|null>(null);
-  const [addCart, setAddCart]               = useState<{ item:any; qty:number }[]>([]);
+  const [addCart, setAddCart]               = useState<{ item:any; qty:number; notes:string }[]>([]);
   const [askPrint, setAskPrint]             = useState(false);
   const [addingItems, setAddingItems]       = useState(false);
   const [addItemsError, setAddItemsError]   = useState('');
+
+  // Opções vinculadas ao item (ex: ponto da carne, adicionais)
+  const [optionsTarget, setOptionsTarget]         = useState<any>(null);
+  const [optionSelections, setOptionSelections]   = useState<Record<string,string[]>>({});
 
   // Transferir itens / trocar mesa
   const [showTransfer, setShowTransfer]         = useState(false);
@@ -177,10 +195,11 @@ export default function Caixa() {
   const subtotal   = (comanda?.items ?? []).reduce((s:number,i:any) => s + i.quantity * parseFloat(i.unitPrice), 0);
   const discRaw    = discount.type === 'percent' ? subtotal * (parseFloat(discount.value)||0) / 100 : (parseFloat(discount.value)||0);
   const discVal    = Math.min(subtotal, Math.max(0, discRaw));
+  const voucherVal = appliedVoucher ? Math.min(subtotal, parseFloat(appliedVoucher.amount) || 0) : 0;
   const surchVal   = surcharge.type && parseFloat(surcharge.value) > 0
     ? (surcharge.type === 'percent' ? subtotal * parseFloat(surcharge.value) / 100 : parseFloat(surcharge.value))
     : 0;
-  const total      = Math.max(0, subtotal - discVal + surchVal);
+  const total      = Math.max(0, subtotal - discVal - voucherVal + surchVal);
   const paidTotal  = payments.reduce((s,p) => s + (parseFloat(p.amount)||0), 0);
   const remaining  = Math.max(0, total - paidTotal);
   const change     = Math.max(0, paidTotal - total);
@@ -235,10 +254,14 @@ export default function Caixa() {
   }
 
   function addToCart(item: any) {
+    if (item.optionGroups?.length) { openOptions(item); return; }
+    addToCartWithNotes(item, '');
+  }
+  function addToCartWithNotes(item: any, notes: string) {
     setAddCart(prev => {
-      const idx = prev.findIndex(c => c.item.id === item.id);
+      const idx = prev.findIndex(c => c.item.id === item.id && (c.notes || '') === (notes || ''));
       if (idx >= 0) { const n=[...prev]; n[idx]={...n[idx],qty:n[idx].qty+1}; return n; }
-      return [...prev, { item, qty:1 }];
+      return [...prev, { item, qty:1, notes: notes || '' }];
     });
   }
   function changeCartQty(idx:number, delta:number) {
@@ -248,11 +271,47 @@ export default function Caixa() {
     setAddCart(prev => prev.filter((_,i) => i !== idx));
   }
 
+  // ── Opções vinculadas ao item ────────────────────────────────────────────
+
+  function openOptions(item: any) {
+    setOptionsTarget(item);
+    const initial: Record<string,string[]> = {};
+    (item.optionGroups ?? []).forEach((g:any) => { initial[g.id] = []; });
+    setOptionSelections(initial);
+  }
+
+  function toggleOption(groupId: string, optionId: string, maxSelect: number) {
+    setOptionSelections(prev => {
+      const current = prev[groupId] ?? [];
+      if (current.includes(optionId)) return { ...prev, [groupId]: current.filter(i => i !== optionId) };
+      if (maxSelect === 1) return { ...prev, [groupId]: [optionId] };
+      if (current.length >= maxSelect) return prev;
+      return { ...prev, [groupId]: [...current, optionId] };
+    });
+  }
+
+  function optionsValid(item: any) {
+    return (item.optionGroups ?? []).every((g:any) => (optionSelections[g.id]?.length ?? 0) >= g.minSelect);
+  }
+
+  function confirmOptions() {
+    if (!optionsTarget) return;
+    const parts: string[] = [];
+    for (const g of optionsTarget.optionGroups ?? []) {
+      const selectedIds = optionSelections[g.id] ?? [];
+      if (!selectedIds.length) continue;
+      const names = selectedIds.map((oid:string) => g.options.find((o:any) => o.id === oid)?.name).filter(Boolean);
+      if (names.length) parts.push(`${g.name}: ${names.join(', ')}`);
+    }
+    addToCartWithNotes(optionsTarget, parts.join('; '));
+    setOptionsTarget(null);
+  }
+
   async function submitAddItems(print: boolean) {
     if (!id || !addCart.length) return;
     setAddingItems(true); setAddItemsError('');
     try {
-      await comandasApi.addItems(id, addCart.map(c => ({ menuItemId:c.item.id, quantity:c.qty })), print);
+      await comandasApi.addItems(id, addCart.map(c => ({ menuItemId:c.item.id, quantity:c.qty, notes:c.notes || undefined })), print);
       setShowAddItems(false); setAskPrint(false); setAddCart([]);
       await load();
     } catch(e:any) {
@@ -357,6 +416,34 @@ export default function Caixa() {
     else setDiscount({ type:'fixed', value:'0' });
   }
 
+  // ── Voucher (cupom de desconto) ──────────────────────────────────────────
+
+  async function lookupVoucher() {
+    if (!voucherCode.trim()) return;
+    setVoucherLookupLoading(true); setVoucherLookupError(''); setVoucherLookup(null);
+    try {
+      const v: any = await vouchersApi.getByCode(voucherCode.trim());
+      setVoucherLookup(v);
+    } catch (e:any) { setVoucherLookupError(e.message); }
+    finally { setVoucherLookupLoading(false); }
+  }
+
+  async function confirmVoucher() {
+    if (!voucherLookup) return;
+    if (!voucherPassword) { setVoucherConfirmError('Informe a senha de confirmação.'); return; }
+    setVoucherConfirming(true); setVoucherConfirmError('');
+    try {
+      const v: any = await vouchersApi.confirm(voucherLookup.id, voucherPassword);
+      setAppliedVoucher(v);
+      setVoucherLookup(null); setVoucherCode(''); setVoucherPassword('');
+    } catch (e:any) { setVoucherConfirmError(e.message); }
+    finally { setVoucherConfirming(false); }
+  }
+
+  function removeVoucher() {
+    setAppliedVoucher(null);
+  }
+
   async function pay() {
     if (remaining > 0.01) { setPayError('Valor recebido insuficiente.'); return; }
     const validPays = payments.filter(p => parseFloat(p.amount) > 0);
@@ -369,9 +456,11 @@ export default function Caixa() {
         discountValue:  discVal > 0 ? (parseFloat(discount.value) || 0) : undefined,
         surchargeType:  surcharge.type || undefined,
         surchargeValue: surcharge.type ? (parseFloat(surcharge.value) || 0) : undefined,
+        voucherId: appliedVoucher?.id || undefined,
       });
       await load();
       setShowPay(false);
+      setAppliedVoucher(null);
     } catch(e:any) { setPayError(e.message); }
     finally { setPaying(false); }
   }
@@ -459,6 +548,82 @@ export default function Caixa() {
 
           {comanda?.status !== 'CLOSED' && (
             <>
+              {/* Voucher */}
+              <div style={{ marginBottom:8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ color:'#666', fontSize:13 }}>Voucher</span>
+                  {!appliedVoucher && (
+                    <div style={{ display:'flex', gap:6 }}>
+                      <input value={voucherCode}
+                        onChange={e=>{ setVoucherCode(e.target.value.toUpperCase()); setVoucherLookup(null); setVoucherLookupError(''); }}
+                        onKeyDown={e=>e.key==='Enter' && lookupVoucher()}
+                        placeholder="Código"
+                        style={{ width:110, border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px',
+                          fontSize:13, fontWeight:700, outline:'none', textTransform:'uppercase', fontFamily:'inherit' }} />
+                      <button onClick={lookupVoucher} disabled={voucherLookupLoading || !voucherCode.trim()}
+                        style={{ background:`${BRAND.navy}15`, border:'none', borderRadius:8, padding:'6px 12px',
+                          cursor:'pointer', fontWeight:700, fontSize:12, color:BRAND.navy, fontFamily:'inherit' }}>
+                        {voucherLookupLoading ? '...' : 'Buscar'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {voucherLookupError && <p style={{ color:BRAND.red, fontSize:12, fontWeight:700, margin:'6px 0 0' }}>{voucherLookupError}</p>}
+
+                {voucherLookup && !appliedVoucher && (
+                  <div style={{ background:'#fff', border:`1.5px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px', marginTop:8 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:4 }}>
+                      <span style={{ color:'#666' }}>Valor</span>
+                      <span style={{ fontWeight:700, color:BRAND.navy }}>{fmtBRL(voucherLookup.amount)}</span>
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:4 }}>
+                      <span style={{ color:'#666' }}>Vencimento</span>
+                      <span style={{ fontWeight:700, color:BRAND.navy }}>
+                        {new Date(voucherLookup.dueDate).toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' })}
+                      </span>
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom: voucherLookup.status==='PAID' ? 10 : 0 }}>
+                      <span style={{ color:'#666' }}>Status</span>
+                      <span style={{ fontWeight:700, color: voucherLookup.status==='PAID' ? BRAND.green : BRAND.red }}>
+                        {VOUCHER_STATUS_LABELS[voucherLookup.status] ?? voucherLookup.status}
+                      </span>
+                    </div>
+
+                    {voucherLookup.status === 'PAID' ? (
+                      <>
+                        <input type="password" value={voucherPassword} onChange={e=>setVoucherPassword(e.target.value)}
+                          onKeyDown={e=>e.key==='Enter' && confirmVoucher()}
+                          placeholder="Senha de confirmação"
+                          style={{ width:'100%', boxSizing:'border-box', border:`1.5px solid ${BRAND.navy}`, borderRadius:8,
+                            padding:'8px 10px', fontSize:13, outline:'none', marginBottom:8, fontFamily:'inherit' }} />
+                        {voucherConfirmError && <p style={{ color:BRAND.red, fontSize:12, fontWeight:700, margin:'0 0 8px' }}>{voucherConfirmError}</p>}
+                        <button onClick={confirmVoucher} disabled={voucherConfirming} style={{
+                          width:'100%', background:BRAND.green, color:'#fff', border:'none', borderRadius:8,
+                          padding:'8px', cursor:'pointer', fontWeight:800, fontSize:13, fontFamily:'inherit',
+                        }}>
+                          {voucherConfirming ? 'Confirmando…' : 'Aplicar Voucher'}
+                        </button>
+                      </>
+                    ) : (
+                      <p style={{ margin:0, fontSize:12, color:BRAND.red, fontWeight:600 }}>
+                        Este voucher não pode ser usado (status: {VOUCHER_STATUS_LABELS[voucherLookup.status] ?? voucherLookup.status}).
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {appliedVoucher && (
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:`${BRAND.green}18`, borderRadius:8, padding:'8px 12px', marginTop:8 }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:BRAND.navy }}>🎟️ {appliedVoucher.code} aplicado</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontWeight:700, color:BRAND.green, fontSize:13 }}>−{fmtBRL(voucherVal)}</span>
+                      <button onClick={removeVoucher} style={{ background:'none', border:'none', color:BRAND.red, cursor:'pointer', fontSize:14 }}>✕</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div style={{ marginBottom:8 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <span style={{ color:'#666', fontSize:13 }}>Desconto</span>
@@ -492,6 +657,13 @@ export default function Caixa() {
             <span style={{ fontWeight:900, fontSize:18, color:BRAND.navy }}>Total</span>
             <span style={{ fontWeight:900, fontSize:22, color:comanda?.status==='CLOSED'?BRAND.green:BRAND.navy }}>{fmtBRL(comanda?.status==='CLOSED'? comanda.total : total)}</span>
           </div>
+
+          {comanda?.status === 'CLOSED' && comanda?.voucherCode && Number(comanda.voucherDiscount) > 0 && (
+            <div style={{ marginTop:12, display:'flex', justifyContent:'space-between', fontSize:13, color:'#666' }}>
+              <span>🎟️ Voucher {comanda.voucherCode}</span>
+              <span style={{ color:BRAND.green, fontWeight:700 }}>−{fmtBRL(comanda.voucherDiscount)}</span>
+            </div>
+          )}
 
           {comanda?.status === 'CLOSED' && (comanda?.payments ?? []).length > 0 && (
             <div style={{ marginTop:14, paddingTop:12, borderTop:`1px solid #e8e2dc` }}>
@@ -533,6 +705,7 @@ export default function Caixa() {
             {/* Summary chip */}
             <div style={{ background:`${BRAND.navy}0d`, borderRadius:14, padding:'16px', marginBottom:20 }}>
               {discVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Desconto {discount.type==='percent' ? `(${discount.value}%)` : ''}</span><span style={{ color:BRAND.green }}>−{fmtBRL(discVal)}</span></div>}
+              {voucherVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Voucher ({appliedVoucher.code})</span><span style={{ color:BRAND.green }}>−{fmtBRL(voucherVal)}</span></div>}
               {surchVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Gorjeta {surcharge.type==='percent' ? `(${surcharge.value}%)` : ''}</span><span style={{ color:BRAND.orange }}>+{fmtBRL(surchVal)}</span></div>}
               <div style={{ display:'flex', justifyContent:'space-between' }}>
                 <span style={{ fontWeight:900, fontSize:17, color:BRAND.navy }}>Total a pagar</span>
@@ -689,7 +862,10 @@ export default function Caixa() {
                   <div style={{ background:'#fff', borderRadius:12, border:`1.5px solid ${BRAND.navy}`, padding:12, marginBottom:16 }}>
                     {addCart.map((c,idx) => (
                       <div key={idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom: idx < addCart.length-1 ? '1px solid #f0ebe5' : 'none' }}>
-                        <span style={{ fontSize:13, fontWeight:600, color:BRAND.navy }}>{c.item.name}</span>
+                        <div>
+                          <span style={{ fontSize:13, fontWeight:600, color:BRAND.navy }}>{c.item.name}</span>
+                          {c.notes && <div style={{ fontSize:11, color:BRAND.orange, marginTop:2 }}>📝 {c.notes}</div>}
+                        </div>
                         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                           <button onClick={()=>changeCartQty(idx,-1)} style={{ width:24, height:24, borderRadius:'50%', border:`1.5px solid ${BRAND.navy}`, background:'transparent', cursor:'pointer', fontWeight:900 }}>−</button>
                           <span style={{ fontWeight:800, minWidth:16, textAlign:'center' }}>{c.qty}</span>
@@ -726,6 +902,51 @@ export default function Caixa() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Opções vinculadas ao item */}
+      {optionsTarget && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(13,27,42,.85)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:170 }}
+          onClick={e=>{ if (e.target === e.currentTarget) setOptionsTarget(null); }}>
+          <div style={{ background:BRAND.cream, borderRadius:'24px 24px 0 0', borderTop:`3px solid ${BRAND.navy}`, padding:'24px 20px 40px', width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <div style={{ fontWeight:900, fontSize:18, color:BRAND.navy }}>{optionsTarget.name}</div>
+              <button onClick={()=>setOptionsTarget(null)} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:BRAND.navy }}>✕</button>
+            </div>
+
+            {(optionsTarget.optionGroups ?? []).map((g:any) => {
+              const selected = optionSelections[g.id] ?? [];
+              return (
+                <div key={g.id} style={{ marginBottom:18 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:BRAND.navy }}>
+                    {g.name}{g.minSelect > 0 && <span style={{ color:BRAND.red }}> *</span>}
+                  </div>
+                  <div style={{ fontSize:11, color:'#999', marginBottom:8 }}>
+                    {g.minSelect === g.maxSelect ? `Escolha ${g.minSelect}` : `Escolha até ${g.maxSelect}`}
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                    {g.options.map((o:any) => {
+                      const isSel = selected.includes(o.id);
+                      const atCap = !isSel && g.maxSelect > 1 && selected.length >= g.maxSelect;
+                      return (
+                        <button key={o.id} onClick={()=>toggleOption(g.id, o.id, g.maxSelect)} disabled={atCap} style={{
+                          padding:'8px 14px', borderRadius:999, border:`2px solid ${isSel ? BRAND.orange : '#ddd'}`,
+                          background: isSel ? BRAND.orange : '#fff', color: isSel ? '#fff' : BRAND.navy,
+                          fontWeight:700, fontSize:13, cursor: atCap ? 'default' : 'pointer', fontFamily:'inherit',
+                          opacity: atCap ? .4 : 1,
+                        }}>
+                          {o.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            <PillBtn onClick={confirmOptions} disabled={!optionsValid(optionsTarget)}>Adicionar</PillBtn>
           </div>
         </div>
       )}

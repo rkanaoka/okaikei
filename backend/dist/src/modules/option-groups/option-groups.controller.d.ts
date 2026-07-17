@@ -6,9 +6,9 @@ export declare class OptionGroupsController {
         options: {
             id: string;
             name: string;
-            active: boolean;
-            sortOrder: number;
             price: import("@prisma/client/runtime/library").Decimal;
+            sortOrder: number;
+            active: boolean;
             groupId: string;
         }[];
         menuItems: {
@@ -18,12 +18,12 @@ export declare class OptionGroupsController {
     } & {
         id: string;
         name: string;
-        active: boolean;
+        sortOrder: number;
         createdAt: Date;
         updatedAt: Date;
-        sortOrder: number;
         minSelect: number;
         maxSelect: number;
+        active: boolean;
     })[]>;
     create(body: {
         name: string;
@@ -34,9 +34,9 @@ export declare class OptionGroupsController {
         options: {
             id: string;
             name: string;
-            active: boolean;
-            sortOrder: number;
             price: import("@prisma/client/runtime/library").Decimal;
+            sortOrder: number;
+            active: boolean;
             groupId: string;
         }[];
         menuItems: {
@@ -46,12 +46,12 @@ export declare class OptionGroupsController {
     } & {
         id: string;
         name: string;
-        active: boolean;
+        sortOrder: number;
         createdAt: Date;
         updatedAt: Date;
-        sortOrder: number;
         minSelect: number;
         maxSelect: number;
+        active: boolean;
     }>;
     updateOption(optionId: string, body: {
         name?: string;
@@ -60,18 +60,18 @@ export declare class OptionGroupsController {
     }): Promise<{
         id: string;
         name: string;
-        active: boolean;
-        sortOrder: number;
         price: import("@prisma/client/runtime/library").Decimal;
+        sortOrder: number;
+        active: boolean;
         groupId: string;
     }>;
     findOne(id: string): Promise<{
         options: {
             id: string;
             name: string;
-            active: boolean;
-            sortOrder: number;
             price: import("@prisma/client/runtime/library").Decimal;
+            sortOrder: number;
+            active: boolean;
             groupId: string;
         }[];
         menuItems: {
@@ -81,20 +81,20 @@ export declare class OptionGroupsController {
     } & {
         id: string;
         name: string;
-        active: boolean;
+        sortOrder: number;
         createdAt: Date;
         updatedAt: Date;
-        sortOrder: number;
         minSelect: number;
         maxSelect: number;
+        active: boolean;
     }>;
     update(id: string, body: any): Promise<{
         options: {
             id: string;
             name: string;
-            active: boolean;
-            sortOrder: number;
             price: import("@prisma/client/runtime/library").Decimal;
+            sortOrder: number;
+            active: boolean;
             groupId: string;
         }[];
         menuItems: {
@@ -104,12 +104,12 @@ export declare class OptionGroupsController {
     } & {
         id: string;
         name: string;
-        active: boolean;
+        sortOrder: number;
         createdAt: Date;
         updatedAt: Date;
-        sortOrder: number;
         minSelect: number;
         maxSelect: number;
+        active: boolean;
     }>;
     remove(id: string): Promise<{
         id: string;
@@ -120,9 +120,9 @@ export declare class OptionGroupsController {
         options: {
             id: string;
             name: string;
-            active: boolean;
-            sortOrder: number;
             price: import("@prisma/client/runtime/library").Decimal;
+            sortOrder: number;
+            active: boolean;
             groupId: string;
         }[];
         menuItems: {
@@ -132,11 +132,11 @@ export declare class OptionGroupsController {
     } & {
         id: string;
         name: string;
-        active: boolean;
+        sortOrder: number;
         createdAt: Date;
         updatedAt: Date;
-        sortOrder: number;
         minSelect: number;
         maxSelect: number;
+        active: boolean;
     }>;
 }

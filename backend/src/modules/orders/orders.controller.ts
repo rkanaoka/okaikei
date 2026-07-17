@@ -85,6 +85,7 @@ export class OrdersController {
       surchargeValue?: number;
       discountType?:   string;
       discountValue?:  number;
+      voucherId?:      string;
       payments: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
       printReceipt?: boolean;
     },

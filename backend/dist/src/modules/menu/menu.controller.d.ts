@@ -28,13 +28,13 @@ export declare class MenuController {
     }>;
     findAll(all?: string): Promise<any[]>;
     findOne(id: string): Promise<{
+        optionGroups: any[];
         menuCategory: {
             id: string;
             name: string;
             sortOrder: number;
             createdAt: Date;
         };
-    } & {
         id: string;
         name: string;
         description: string | null;

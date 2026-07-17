@@ -5,6 +5,9 @@ import { randomInt } from 'crypto';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem caracteres ambíguos (0/O, 1/I)
 const STATUSES = ['NEGOTIATION', 'PAID', 'USED', 'CANCELLED', 'EXPIRED'];
+const STATUS_LABELS: Record<string, string> = {
+  NEGOTIATION: 'Negociação', PAID: 'Pago', USED: 'Usado', CANCELLED: 'Cancelado', EXPIRED: 'Vencido',
+};
 
 type VoucherInput = {
   customerName: string;
@@ -46,6 +49,34 @@ export class VouchersService {
 
   async list() {
     return this.prisma.voucher.findMany({ orderBy: { createdAt: 'desc' } });
+  }
+
+  // Consulta pública usada no caixa: mostra valor/vencimento/status pelo código, sem expor a senha.
+  async findByCode(rawCode: string) {
+    const code = rawCode.trim().toUpperCase();
+    const voucher = await this.prisma.voucher.findUnique({ where: { code } });
+    if (!voucher) throw new NotFoundException('Voucher não encontrado');
+    return {
+      id: voucher.id, code: voucher.code, amount: voucher.amount,
+      dueDate: voucher.dueDate, status: voucher.status,
+    };
+  }
+
+  // Confirma a senha e o status antes de permitir a aplicação do desconto no caixa.
+  // Não consome o voucher — isso só acontece no fechamento da comanda (OrdersService.closeComanda).
+  async confirmForUse(id: string, password: string) {
+    const voucher = await this.prisma.voucher.findUnique({ where: { id } });
+    if (!voucher) throw new NotFoundException('Voucher não encontrado');
+    if (voucher.status !== 'PAID') {
+      throw new BadRequestException(`Este voucher está com status "${STATUS_LABELS[voucher.status] ?? voucher.status}" e não pode ser usado`);
+    }
+    if (!password || voucher.confirmationPassword !== password) {
+      throw new BadRequestException('Senha de confirmação incorreta');
+    }
+    return {
+      id: voucher.id, code: voucher.code, amount: voucher.amount,
+      dueDate: voucher.dueDate, status: voucher.status,
+    };
   }
 
   private validate(dto: Partial<VoucherInput>, { partial }: { partial: boolean }) {

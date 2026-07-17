@@ -22,6 +22,12 @@ let VouchersController = class VouchersController {
     list() {
         return this.vouchers.list();
     }
+    findByCode(code) {
+        return this.vouchers.findByCode(code);
+    }
+    confirm(id, body) {
+        return this.vouchers.confirmForUse(id, body.password);
+    }
     create(body) {
         return this.vouchers.create(body);
     }
@@ -36,6 +42,21 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], VouchersController.prototype, "list", null);
+__decorate([
+    (0, common_1.Get)('by-code/:code'),
+    __param(0, (0, common_1.Param)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], VouchersController.prototype, "findByCode", null);
+__decorate([
+    (0, common_1.Post)(':id/confirm'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], VouchersController.prototype, "confirm", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)()),

@@ -4,10 +4,11 @@ export declare class VouchersController {
     constructor(vouchers: VouchersService);
     list(): Promise<{
         id: string;
+        customerName: string;
+        status: import(".prisma/client").$Enums.VoucherStatus;
         createdAt: Date;
         updatedAt: Date;
-        status: import(".prisma/client").$Enums.VoucherStatus;
-        customerName: string;
+        comandaId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
         code: string;
         confirmationPassword: string;
@@ -18,6 +19,22 @@ export declare class VouchersController {
         customerEmail: string;
         dueDate: Date;
     }[]>;
+    findByCode(code: string): Promise<{
+        id: string;
+        code: string;
+        amount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date;
+        status: import(".prisma/client").$Enums.VoucherStatus;
+    }>;
+    confirm(id: string, body: {
+        password: string;
+    }): Promise<{
+        id: string;
+        code: string;
+        amount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date;
+        status: "PAID";
+    }>;
     create(body: {
         customerName: string;
         customerCpf: string;
@@ -30,10 +47,11 @@ export declare class VouchersController {
         status?: string;
     }): Promise<{
         id: string;
+        customerName: string;
+        status: import(".prisma/client").$Enums.VoucherStatus;
         createdAt: Date;
         updatedAt: Date;
-        status: import(".prisma/client").$Enums.VoucherStatus;
-        customerName: string;
+        comandaId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
         code: string;
         confirmationPassword: string;
@@ -56,10 +74,11 @@ export declare class VouchersController {
         status?: string;
     }): Promise<{
         id: string;
+        customerName: string;
+        status: import(".prisma/client").$Enums.VoucherStatus;
         createdAt: Date;
         updatedAt: Date;
-        status: import(".prisma/client").$Enums.VoucherStatus;
-        customerName: string;
+        comandaId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
         code: string;
         confirmationPassword: string;

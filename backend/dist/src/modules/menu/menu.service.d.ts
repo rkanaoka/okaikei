@@ -8,13 +8,13 @@ export declare class MenuService {
     constructor(prisma: PrismaService, redis: RedisService, sync: SyncService);
     findAll(includeUnavailable?: boolean): Promise<any[]>;
     findOne(id: string): Promise<{
+        optionGroups: any[];
         menuCategory: {
             id: string;
             name: string;
             sortOrder: number;
             createdAt: Date;
         };
-    } & {
         id: string;
         name: string;
         description: string | null;

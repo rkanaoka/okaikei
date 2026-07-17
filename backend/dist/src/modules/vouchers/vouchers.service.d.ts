@@ -15,10 +15,11 @@ export declare class VouchersService {
     constructor(prisma: PrismaService);
     list(): Promise<{
         id: string;
+        customerName: string;
+        status: import(".prisma/client").$Enums.VoucherStatus;
         createdAt: Date;
         updatedAt: Date;
-        status: import(".prisma/client").$Enums.VoucherStatus;
-        customerName: string;
+        comandaId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
         code: string;
         confirmationPassword: string;
@@ -29,13 +30,28 @@ export declare class VouchersService {
         customerEmail: string;
         dueDate: Date;
     }[]>;
+    findByCode(rawCode: string): Promise<{
+        id: string;
+        code: string;
+        amount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date;
+        status: import(".prisma/client").$Enums.VoucherStatus;
+    }>;
+    confirmForUse(id: string, password: string): Promise<{
+        id: string;
+        code: string;
+        amount: import("@prisma/client/runtime/library").Decimal;
+        dueDate: Date;
+        status: "PAID";
+    }>;
     private validate;
     create(dto: VoucherInput): Promise<{
         id: string;
+        customerName: string;
+        status: import(".prisma/client").$Enums.VoucherStatus;
         createdAt: Date;
         updatedAt: Date;
-        status: import(".prisma/client").$Enums.VoucherStatus;
-        customerName: string;
+        comandaId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
         code: string;
         confirmationPassword: string;
@@ -48,10 +64,11 @@ export declare class VouchersService {
     }>;
     update(id: string, dto: Partial<VoucherInput>): Promise<{
         id: string;
+        customerName: string;
+        status: import(".prisma/client").$Enums.VoucherStatus;
         createdAt: Date;
         updatedAt: Date;
-        status: import(".prisma/client").$Enums.VoucherStatus;
-        customerName: string;
+        comandaId: string | null;
         amount: import("@prisma/client/runtime/library").Decimal;
         code: string;
         confirmationPassword: string;

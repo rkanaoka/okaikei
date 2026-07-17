@@ -79,6 +79,7 @@ export const comandasApi = {
   pay: (id: string, d: {
     surchargeType?: string; surchargeValue?: number;
     discountType?:  string; discountValue?:  number;
+    voucherId?:     string;
     payments: Array<{ method: string; amount: number }>;
     printReceipt?: boolean;
   }) => http.post(`/comandas/${id}/pay`, d),
@@ -125,6 +126,9 @@ export const vouchersApi = {
   list:   ()       => http.get('/vouchers'),
   create: (d: VoucherInput) => http.post('/vouchers', d),
   update: (id: string, d: Partial<VoucherInput>) => http.put(`/vouchers/${id}`, d),
+
+  getByCode: (code: string) => http.get(`/vouchers/by-code/${encodeURIComponent(code)}`),
+  confirm:   (id: string, password: string) => http.post(`/vouchers/${id}/confirm`, { password }),
 };
 
 // ── Modelos de Impressão ────────────────────────────────────────────────────────

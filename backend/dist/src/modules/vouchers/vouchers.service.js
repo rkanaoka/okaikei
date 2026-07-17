@@ -16,6 +16,9 @@ const uuidv7_1 = require("uuidv7");
 const crypto_1 = require("crypto");
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const STATUSES = ['NEGOTIATION', 'PAID', 'USED', 'CANCELLED', 'EXPIRED'];
+const STATUS_LABELS = {
+    NEGOTIATION: 'Negociação', PAID: 'Pago', USED: 'Usado', CANCELLED: 'Cancelado', EXPIRED: 'Vencido',
+};
 function generateCode() {
     let code = '';
     for (let i = 0; i < 8; i++)
@@ -45,6 +48,31 @@ let VouchersService = class VouchersService {
     }
     async list() {
         return this.prisma.voucher.findMany({ orderBy: { createdAt: 'desc' } });
+    }
+    async findByCode(rawCode) {
+        const code = rawCode.trim().toUpperCase();
+        const voucher = await this.prisma.voucher.findUnique({ where: { code } });
+        if (!voucher)
+            throw new common_1.NotFoundException('Voucher não encontrado');
+        return {
+            id: voucher.id, code: voucher.code, amount: voucher.amount,
+            dueDate: voucher.dueDate, status: voucher.status,
+        };
+    }
+    async confirmForUse(id, password) {
+        const voucher = await this.prisma.voucher.findUnique({ where: { id } });
+        if (!voucher)
+            throw new common_1.NotFoundException('Voucher não encontrado');
+        if (voucher.status !== 'PAID') {
+            throw new common_1.BadRequestException(`Este voucher está com status "${STATUS_LABELS[voucher.status] ?? voucher.status}" e não pode ser usado`);
+        }
+        if (!password || voucher.confirmationPassword !== password) {
+            throw new common_1.BadRequestException('Senha de confirmação incorreta');
+        }
+        return {
+            id: voucher.id, code: voucher.code, amount: voucher.amount,
+            dueDate: voucher.dueDate, status: voucher.status,
+        };
     }
     validate(dto, { partial }) {
         if (!partial || dto.customerName !== undefined) {

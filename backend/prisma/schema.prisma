@@ -146,6 +146,9 @@ model Comanda {
   surchargeValue Decimal? @default(0) @map("surcharge_value") @db.Decimal(10, 2)
   discountType   String?  @map("discount_type") @db.VarChar(10)
   discountValue  Decimal? @default(0) @map("discount_value") @db.Decimal(10, 2)
+  // Voucher (cupom de desconto) aplicado no fechamento — snapshot, ver Voucher.comandaId para o vínculo
+  voucherCode     String?  @map("voucher_code") @db.VarChar(12)
+  voucherDiscount Decimal  @default(0) @map("voucher_discount") @db.Decimal(10, 2)
 
   openedAt  DateTime  @default(now()) @map("opened_at")
   closedAt  DateTime? @map("closed_at")
@@ -276,6 +279,8 @@ model Voucher {
   amount               Decimal       @db.Decimal(10, 2)
   status               VoucherStatus @default(NEGOTIATION)
   dueDate              DateTime      @map("due_date") @db.Date
+  // Comanda em que o voucher foi usado (preenchido no fechamento da conta) — consulta/histórico
+  comandaId            String?       @map("comanda_id") @db.Uuid
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt            DateTime      @updatedAt @map("updated_at")
 

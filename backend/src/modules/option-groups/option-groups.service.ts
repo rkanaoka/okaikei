@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { RedisService }  from '@/common/redis/redis.service';
 import { uuidv7 } from 'uuidv7';
 
 type OptionDto = { id?: string; name: string; price?: number; active?: boolean };
 
 @Injectable()
 export class OptionGroupsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis:  RedisService,
+  ) {}
 
   async findAll() {
     return this.prisma.optionGroup.findMany({
@@ -30,7 +34,7 @@ export class OptionGroupsService {
   async create(dto: { name: string; minSelect?: number; maxSelect?: number; options?: OptionDto[] }) {
     if (!dto.name?.trim()) throw new BadRequestException('Nome do grupo é obrigatório');
     const options = dto.options ?? [];
-    return this.prisma.optionGroup.create({
+    const group = await this.prisma.optionGroup.create({
       data: {
         id: uuidv7(),
         name: dto.name.trim(),
@@ -44,6 +48,8 @@ export class OptionGroupsService {
       },
       include: { options: true, menuItems: { select: { id: true, name: true } } },
     });
+    await this.redis.invalidateMenu();
+    return group;
   }
 
   async update(id: string, dto: Partial<{
@@ -52,7 +58,7 @@ export class OptionGroupsService {
     await this.findOne(id); // throws if not found
     if (dto.name !== undefined && !dto.name.trim()) throw new BadRequestException('Nome do grupo é obrigatório');
 
-    return this.prisma.$transaction(async (tx) => {
+    const group = await this.prisma.$transaction(async (tx) => {
       if (dto.options) {
         const existing = await tx.menuOption.findMany({ where: { groupId: id }, select: { id: true } });
         const keepIds = new Set(dto.options.filter((o) => o.id).map((o) => o.id));
@@ -85,27 +91,32 @@ export class OptionGroupsService {
         include: { options: { orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] }, menuItems: { select: { id: true, name: true } } },
       });
     });
+    await this.redis.invalidateMenu();
+    return group;
   }
 
   async remove(id: string) {
     await this.findOne(id);
     await this.prisma.optionGroup.delete({ where: { id } });
+    await this.redis.invalidateMenu();
     return { id };
   }
 
   async setItems(id: string, menuItemIds: string[]) {
     await this.findOne(id);
-    return this.prisma.optionGroup.update({
+    const group = await this.prisma.optionGroup.update({
       where: { id },
       data:  { menuItems: { set: menuItemIds.map((itemId) => ({ id: itemId })) } },
       include: { options: true, menuItems: { select: { id: true, name: true } } },
     });
+    await this.redis.invalidateMenu();
+    return group;
   }
 
   async updateOption(optionId: string, dto: Partial<{ name: string; price: number; active: boolean }>) {
     const option = await this.prisma.menuOption.findUnique({ where: { id: optionId } });
     if (!option) throw new NotFoundException(`Opção ${optionId} não encontrada`);
-    return this.prisma.menuOption.update({
+    const updated = await this.prisma.menuOption.update({
       where: { id: optionId },
       data: {
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
@@ -113,5 +124,7 @@ export class OptionGroupsService {
         ...(dto.active !== undefined ? { active: dto.active } : {}),
       },
     });
+    await this.redis.invalidateMenu();
+    return updated;
   }
 }

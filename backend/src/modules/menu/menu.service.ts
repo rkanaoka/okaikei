@@ -4,6 +4,24 @@ import { RedisService }  from '@/common/redis/redis.service';
 import { SyncService }   from '@/modules/sync/sync.service';
 import { uuidv7 }        from 'uuidv7';
 
+// Grupos de opções vinculados ao item — só ativos, opções ordenadas por sortOrder.
+const OPTION_GROUPS_INCLUDE = {
+  optionGroups: {
+    where:   { active: true },
+    include: { options: { where: { active: true }, orderBy: [{ sortOrder: 'asc' as const }, { name: 'asc' as const }] } },
+  },
+};
+
+// A relação M2M não preserva ordem customizada — reordena pelos ids em optionGroupOrder
+// (grupos vinculados depois, fora dessa lista, vão ao final).
+function orderGroups(groups: any[], order: string[]): any[] {
+  if (!order?.length) return groups;
+  const byId = new Map(groups.map((g) => [g.id, g]));
+  const ordered = order.filter((id) => byId.has(id)).map((id) => byId.get(id));
+  const rest = groups.filter((g) => !order.includes(g.id));
+  return [...ordered, ...rest];
+}
+
 // Verifica se o item está dentro da janela de dias/horário configurada.
 // Sem schedule (ou desabilitado) = sempre disponível.
 function isWithinSchedule(schedule: any): boolean {
@@ -34,21 +52,25 @@ export class MenuService {
 
     const items = await this.prisma.menuItem.findMany({
       where:   includeUnavailable ? {} : { available: true },
-      include: { menuCategory: true },
+      include: { menuCategory: true, ...OPTION_GROUPS_INCLUDE },
       orderBy: [{ menuCategory: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { name: 'asc' }],
     });
+    const withOrderedGroups = items.map((i) => ({ ...i, optionGroups: orderGroups(i.optionGroups, i.optionGroupOrder) }));
 
     // No cardápio público (garçom), esconde itens fora da janela de disponibilidade configurada
-    const visible = includeUnavailable ? items : items.filter((i) => isWithinSchedule(i.availabilitySchedule));
+    const visible = includeUnavailable ? withOrderedGroups : withOrderedGroups.filter((i) => isWithinSchedule(i.availabilitySchedule));
 
     if (!includeUnavailable) await this.redis.cacheMenu(visible);
     return visible;
   }
 
   async findOne(id: string) {
-    const item = await this.prisma.menuItem.findUnique({ where: { id }, include: { menuCategory: true } });
+    const item = await this.prisma.menuItem.findUnique({
+      where: { id },
+      include: { menuCategory: true, ...OPTION_GROUPS_INCLUDE },
+    });
     if (!item) throw new NotFoundException(`Item ${id} não encontrado`);
-    return item;
+    return { ...item, optionGroups: orderGroups(item.optionGroups, item.optionGroupOrder) };
   }
 
   async create(dto: {
