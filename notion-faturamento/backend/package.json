@@ -1,0 +1,22 @@
+{
+  "name": "@bodogami/notion-faturamento-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servico independente que le PDFs de faturamento diario (SAIPOS) e envia os dados para uma database do Notion.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node scripts/manage.js start",
+    "stop": "node scripts/manage.js stop",
+    "restart": "node scripts/manage.js restart",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^2.0.0",
+    "pdf-parse": "1.1.1",
+    "xlsx": "^0.18.5"
+  }
+}

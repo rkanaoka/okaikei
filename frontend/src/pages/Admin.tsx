@@ -23,7 +23,7 @@ type SectionId =
   | 'cardapio' | 'cardapio-categorias'
   | 'fin-pagamentos' | 'fin-gorjetas' | 'fin-frentes-caixa'
   | 'rel-clientes'   | 'rel-cupons'
-  | 'rel-itens'      | 'rel-faturamento' | 'rel-tempo'
+  | 'rel-itens'      | 'rel-faturamento' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
   | 'estoque'
   | 'config-loja'    | 'config-horarios' | 'config-fiscal'
   | 'config-cancelamento' | 'config-desconto' | 'config-impressao';
@@ -47,9 +47,11 @@ const NAV: Array<
     { id:'rel-cupons',   label:'Vouchers' },
   ]},
   { type:'group', label:'Relatórios', icon:'📈', items:[
-    { id:'rel-itens',        label:'Itens vendidos' },
-    { id:'rel-faturamento',  label:'Faturamento por dia' },
-    { id:'rel-tempo',        label:'Tempo por status' },
+    { id:'rel-itens',              label:'Itens vendidos' },
+    { id:'rel-faturamento',        label:'Faturamento por dia' },
+    { id:'rel-tempo',              label:'Tempo por status' },
+    { id:'rel-faturamento-notion', label:'Importar Faturamento (Notion)' },
+    { id:'rel-extrato-notion',     label:'Importar Extrato Bancário (Notion)' },
   ]},
   { type:'link',  id:'estoque', label:'Estoque', icon:'📦' },
   { type:'group', label:'Configurações', icon:'⚙️', items:[
@@ -76,6 +78,38 @@ function renderSection(id: SectionId) {
     case 'rel-itens':           return <ItensVendidos />;
     case 'rel-faturamento':     return <Faturamento />;
     case 'rel-tempo':           return <TempoStatus />;
+    case 'rel-faturamento-notion': return (
+      <div style={{ textAlign:'center', padding:'80px 40px' }}>
+        <div style={{ fontSize:56, marginBottom:16 }}>🗂️</div>
+        <h2 style={{ margin:0, fontSize:18, fontWeight:800, color:BRAND.navy }}>Importar Faturamento (Notion)</h2>
+        <p style={{ margin:'8px 0 24px', color:'#aaa', fontSize:13 }}>
+          Envie o PDF mensal "Faturamento por dia" do SAIPOS e sincronize com sua database do Notion.
+        </p>
+        <Link to="/notion-faturamento" style={{
+          display:'inline-block', padding:'10px 22px', borderRadius:8, fontSize:14, fontWeight:700,
+          textDecoration:'none', color:'#fff',
+          background:`linear-gradient(135deg,${BRAND.orange},${BRAND.red})`,
+        }}>
+          Abrir importador →
+        </Link>
+      </div>
+    );
+    case 'rel-extrato-notion': return (
+      <div style={{ textAlign:'center', padding:'80px 40px' }}>
+        <div style={{ fontSize:56, marginBottom:16 }}>🏦</div>
+        <h2 style={{ margin:0, fontSize:18, fontWeight:800, color:BRAND.navy }}>Importar Extrato Bancário (Notion)</h2>
+        <p style={{ margin:'8px 0 24px', color:'#aaa', fontSize:13 }}>
+          Envie o extrato mensal do Itaú e sincronize os lançamentos com o Notion.
+        </p>
+        <Link to="/notion-extrato" style={{
+          display:'inline-block', padding:'10px 22px', borderRadius:8, fontSize:14, fontWeight:700,
+          textDecoration:'none', color:'#fff',
+          background:`linear-gradient(135deg,${BRAND.orange},${BRAND.red})`,
+        }}>
+          Abrir importador →
+        </Link>
+      </div>
+    );
     case 'estoque':             return <EmptyPlaceholder icon="📦" title="Estoque" subtitle="Fichas técnicas e controle de insumos — em breve" />;
     case 'config-loja':         return <ConfigLoja />;
     case 'config-horarios':     return <EmptyPlaceholder icon="🕐" title="Horários de Funcionamento" subtitle="Módulo em desenvolvimento" />;

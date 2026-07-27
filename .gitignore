@@ -7,3 +7,5 @@ pratos.txt
 data/
 persistent/
 infra/migrations/2_seed_test_items.js
+notion-faturamento/backend/.server.pid
+notion-faturamento/backend/.server.log
