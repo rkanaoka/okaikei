@@ -174,7 +174,7 @@ function parseExtratoText(text) {
       descricao: row.description,
       entrada: row.isDebit ? null : row.value,
       saida: row.isDebit ? row.value : null,
-      chave: `${dataIso}#${seq}`,
+      chave: `itau#${dataIso}#${seq}`,
     });
   }
 

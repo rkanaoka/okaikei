@@ -156,7 +156,7 @@ function parseSimpleFormat(rows, headerIdx, fileName) {
       descricao: descTrim,
       entrada: credito > 0 ? credito : null,
       saida: debito > 0 ? debito : null,
-      chave: `${dataIso}#${seq}`,
+      chave: `santander#${dataIso}#${seq}`,
     });
   }
 
@@ -211,7 +211,7 @@ function parseDetalhadoFormat(rows, headerIdx) {
       descricao,
       entrada: valor > 0 ? valor : null,
       saida: valor < 0 ? -valor : null,
-      chave: `${dataIso}#${seq}`,
+      chave: `santander#${dataIso}#${seq}`,
     });
   }
 

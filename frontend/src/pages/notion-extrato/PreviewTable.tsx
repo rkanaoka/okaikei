@@ -3,13 +3,13 @@ import type { ExtratoTransaction, ExtratoSyncResultItem, SyncStatus } from './ty
 
 const STATUS_LABEL: Record<SyncStatus, string> = {
   criado: 'Criado',
-  atualizado: 'Atualizado',
+  ignorado: 'Já existe (ignorado)',
   erro: 'Erro',
 };
 
 const STATUS_COLOR: Record<SyncStatus, { bg: string; fg: string }> = {
   criado: { bg: '#e6f1ea', fg: BRAND.green },
-  atualizado: { bg: '#e8eef5', fg: '#33587d' },
+  ignorado: { bg: '#e8eef5', fg: '#33587d' },
   erro: { bg: '#fbe9e5', fg: BRAND.red },
 };
 

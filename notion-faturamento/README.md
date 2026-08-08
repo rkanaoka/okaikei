@@ -70,6 +70,14 @@ Se "Conta Financeira" ou "Competência de Exercício" forem relations, o serviç
 
 Cada lançamento vira uma página com `Conta Financeira` = "Itaú" (extrato PDF) ou "Santander" (planilha .xlsx), e `Competência de Exercício` = o mês do extrato (ex: "2026-01" para janeiro/2026) — ambos editáveis na tela antes de enviar.
 
+### 2.3 Segurança contra sobrescrita — sync é somente-criação
+
+O `Chave de Importação` de cada lançamento inclui o banco de origem (ex: `itau#2026-06-15#1`, `santander#2026-06-15#1`), justamente para que um lançamento do Itaú e um do Santander no mesmo dia nunca gerem a mesma chave.
+
+Além disso, `/api/extrato/sync` **nunca edita nem remove** uma página já existente no Notion. Se a "Chave de Importação" de um lançamento já existir na database, a linha é apenas ignorada (status "ignorado" na tela) — não é criada uma página nova nem a existente é sobrescrita. Isso existe porque uma versão anterior fazia upsert (criava OU atualizava por chave) e, como a chave antiga não incluía o banco de origem, sincronizar um extrato Santander depois de um Itaú do mesmo mês podia sobrescrever silenciosamente lançamentos do Itaú com dados do Santander nos dias em que as sequências coincidiam. Se algum lançamento precisar ser corrigido depois de já sincronizado, a correção deve ser feita manualmente direto no Notion.
+
+**Se você foi afetado pelo bug antigo** (lançamentos do Itaú com conteúdo do Santander, ou vice-versa, num mesmo mês): reenvie os extratos do mês afetado — com a chave corrigida, o reenvio cria os lançamentos corretos para os dois bancos sem duplicar nada que já esteja com a chave nova (`itau#...`/`santander#...`). Depois, revise manualmente na database do Notion se sobraram páginas antigas com `Chave de Importação` no formato antigo (sem prefixo de banco, ex: `2026-06-15#1`) — essas são resíduos do bug e podem estar com o banco/valor errado; confira o conteúdo e apague as que forem duplicatas incorretas.
+
 ## 3. Configurar e rodar o serviço
 
 ```bash

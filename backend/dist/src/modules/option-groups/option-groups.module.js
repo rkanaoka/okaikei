@@ -8,15 +8,20 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OptionGroupsModule = void 0;
 const common_1 = require("@nestjs/common");
-const option_groups_controller_1 = require("./option-groups.controller");
-const option_groups_service_1 = require("./option-groups.service");
+const option_groups_controller_1 = require("../../runtimes/api/controllers/option-groups.controller");
+const option_groups_service_1 = require("./application/use-cases/option-groups.service");
+const option_group_repository_port_1 = require("./domain/repositories/option-group-repository.port");
+const prisma_option_group_repository_1 = require("./infrastructure/repositories/prisma-option-group.repository");
 let OptionGroupsModule = class OptionGroupsModule {
 };
 exports.OptionGroupsModule = OptionGroupsModule;
 exports.OptionGroupsModule = OptionGroupsModule = __decorate([
     (0, common_1.Module)({
         controllers: [option_groups_controller_1.OptionGroupsController],
-        providers: [option_groups_service_1.OptionGroupsService],
+        providers: [
+            option_groups_service_1.OptionGroupsService,
+            { provide: option_group_repository_port_1.OPTION_GROUP_REPOSITORY_PORT, useClass: prisma_option_group_repository_1.PrismaOptionGroupRepository },
+        ],
     })
 ], OptionGroupsModule);
 //# sourceMappingURL=option-groups.module.js.map

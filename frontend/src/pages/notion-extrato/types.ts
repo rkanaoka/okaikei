@@ -15,7 +15,7 @@ export interface ExtratoParseResponse {
   transactions: ExtratoTransaction[];
 }
 
-export type SyncStatus = 'criado' | 'atualizado' | 'erro';
+export type SyncStatus = 'criado' | 'ignorado' | 'erro';
 
 export interface ExtratoSyncResultItem {
   chave: string;

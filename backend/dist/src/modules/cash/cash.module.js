@@ -8,15 +8,20 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CashModule = void 0;
 const common_1 = require("@nestjs/common");
-const cash_controller_1 = require("./cash.controller");
-const cash_service_1 = require("./cash.service");
+const cash_controller_1 = require("../../runtimes/api/controllers/cash.controller");
+const cash_service_1 = require("./application/use-cases/cash.service");
+const cash_repository_port_1 = require("./domain/repositories/cash-repository.port");
+const prisma_cash_repository_1 = require("./infrastructure/repositories/prisma-cash.repository");
 let CashModule = class CashModule {
 };
 exports.CashModule = CashModule;
 exports.CashModule = CashModule = __decorate([
     (0, common_1.Module)({
         controllers: [cash_controller_1.CashController],
-        providers: [cash_service_1.CashService],
+        providers: [
+            cash_service_1.CashService,
+            { provide: cash_repository_port_1.CASH_REPOSITORY_PORT, useClass: prisma_cash_repository_1.PrismaCashRepository },
+        ],
         exports: [cash_service_1.CashService],
     })
 ], CashModule);

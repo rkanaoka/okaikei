@@ -91,8 +91,17 @@ async function findExistingPage(notion, databaseId, chave) {
 }
 
 /**
- * Envia todas as linhas do extrato para o Notion, uma a uma, fazendo upsert
- * por "Chave de Importação". Retorna o resultado de cada linha.
+ * Envia todas as linhas do extrato para o Notion, uma a uma, criando páginas
+ * novas por "Chave de Importação".
+ *
+ * IMPORTANTE — segurança contra sobrescrita: este serviço NUNCA edita nem
+ * remove uma página já existente no Notion. Se já existir uma página com a
+ * mesma "Chave de Importação", a linha é apenas ignorada (não é criada nem
+ * atualizada) e reportada com status "ignorado". Isso evita o cenário em que
+ * uma colisão de chave (ex: entre extratos de bancos diferentes no mesmo dia)
+ * faz um lançamento de um banco sobrescrever silenciosamente o lançamento de
+ * outro banco já sincronizado. Se um lançamento precisar ser corrigido depois
+ * de já sincronizado, a correção deve ser feita manualmente no Notion.
  */
 async function syncExtratoToNotion(rows, { contaFinanceira, competencia }, onProgress) {
   const databaseId = process.env.NOTION_EXTRATO_DATABASE_ID;
@@ -123,13 +132,18 @@ async function syncExtratoToNotion(rows, { contaFinanceira, competencia }, onPro
   const results = [];
   for (const row of rows) {
     try {
-      const properties = buildProperties(row, titlePropertyName, contaFinanceiraValue, competenciaValue);
       const existingPage = await findExistingPage(notion, databaseId, row.chave);
 
       if (existingPage) {
-        await notion.pages.update({ page_id: existingPage.id, properties });
-        results.push({ chave: row.chave, data: row.data, descricao: row.descricao, status: 'atualizado' });
+        results.push({
+          chave: row.chave,
+          data: row.data,
+          descricao: row.descricao,
+          status: 'ignorado',
+          message: 'Já existe uma página com esta Chave de Importação no Notion — não foi editada nem sobrescrita.',
+        });
       } else {
+        const properties = buildProperties(row, titlePropertyName, contaFinanceiraValue, competenciaValue);
         await notion.pages.create({ parent: { database_id: databaseId }, properties });
         results.push({ chave: row.chave, data: row.data, descricao: row.descricao, status: 'criado' });
       }

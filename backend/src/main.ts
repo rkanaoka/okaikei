@@ -4,7 +4,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
-import { AppModule } from './app.module';
+import { AppModule } from './runtimes/api/app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -25,8 +25,6 @@ async function bootstrap() {
     }),
   );
 
-  // Run pending migrations on startup
-  const { PrismaService } = await import('./common/prisma/prisma.service');
   // Prisma connects lazily; migration ran by docker-compose command separately
 
   const port = process.env.PORT ?? 3001;

@@ -8,15 +8,20 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VouchersModule = void 0;
 const common_1 = require("@nestjs/common");
-const vouchers_controller_1 = require("./vouchers.controller");
-const vouchers_service_1 = require("./vouchers.service");
+const vouchers_controller_1 = require("../../runtimes/api/controllers/vouchers.controller");
+const vouchers_service_1 = require("./application/use-cases/vouchers.service");
+const voucher_repository_port_1 = require("./domain/repositories/voucher-repository.port");
+const prisma_voucher_repository_1 = require("./infrastructure/repositories/prisma-voucher.repository");
 let VouchersModule = class VouchersModule {
 };
 exports.VouchersModule = VouchersModule;
 exports.VouchersModule = VouchersModule = __decorate([
     (0, common_1.Module)({
         controllers: [vouchers_controller_1.VouchersController],
-        providers: [vouchers_service_1.VouchersService],
+        providers: [
+            vouchers_service_1.VouchersService,
+            { provide: voucher_repository_port_1.VOUCHER_REPOSITORY_PORT, useClass: prisma_voucher_repository_1.PrismaVoucherRepository },
+        ],
     })
 ], VouchersModule);
 //# sourceMappingURL=vouchers.module.js.map

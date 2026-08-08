@@ -1,0 +1,333 @@
+import { Inject, Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { PRINTER_REPOSITORY_PORT, PrinterRepositoryPort } from '@/modules/printing/domain/repositories/printer-repository.port';
+import { ESC_POS_CLIENT_PORT, EscPosClientPort }          from '@/modules/printing/application/contracts/esc-pos-client.port';
+import {
+  TemplateType, DEFAULT_CONFIGS, DEFAULT_ENABLED, isTemplateType,
+} from '@/modules/print-templates/application/use-cases/print-template-defaults';
+import { PrintTemplatesService } from '@/modules/print-templates/application/use-cases/print-templates.service';
+
+const ESC = 0x1b;
+const GS  = 0x1d;
+
+const CMD = {
+  INIT:          Buffer.from([ESC, 0x40]),
+  ALIGN_CENTER:  Buffer.from([ESC, 0x61, 0x01]),
+  ALIGN_LEFT:    Buffer.from([ESC, 0x61, 0x00]),
+  BOLD_ON:       Buffer.from([ESC, 0x45, 0x01]),
+  BOLD_OFF:      Buffer.from([ESC, 0x45, 0x00]),
+  DOUBLE_HEIGHT: Buffer.from([ESC, 0x21, 0x10]),
+  NORMAL_SIZE:   Buffer.from([ESC, 0x21, 0x00]),
+  LF:            Buffer.from([0x0a]),
+  CUT_PARTIAL:   Buffer.from([GS,  0x56, 0x01]),
+  CUT_FULL:      Buffer.from([GS,  0x56, 0x00]),
+};
+
+function txt(s: string)          { return Buffer.from(s, 'latin1'); }
+function line(c = '-', n = 32)  { return txt(c.repeat(n) + '\n'); }
+function fmtBRL(v: number)       { return `R$ ${v.toFixed(2).replace('.', ',')}`.padStart(9); }
+
+function serviceFeeBase(items: any[]): number {
+  return (items ?? []).reduce((s: number, i: any) => {
+    const eligible = i.menuItem?.chargeServiceFee !== false;
+    return eligible ? s + Number(i.unitPrice) * i.quantity : s;
+  }, 0);
+}
+
+@Injectable()
+export class PrintingService {
+  private readonly logger = new Logger(PrintingService.name);
+
+  constructor(
+    @Inject(PRINTER_REPOSITORY_PORT) private readonly printerRepo: PrinterRepositoryPort,
+    @Inject(ESC_POS_CLIENT_PORT)     private readonly escPos:      EscPosClientPort,
+    private readonly templates: PrintTemplatesService,
+  ) {}
+
+  private async getPrinter(category: string) {
+    return this.printerRepo.findByCategory(category);
+  }
+
+  private async getTemplate(type: TemplateType) {
+    const tpl = await this.templates.getEffective(type);
+    return { enabled: tpl.enabled, config: tpl.config };
+  }
+
+  async printOrderItems(comanda: any, items: any[]) {
+    const byCategory: Record<string, any[]> = {};
+    for (const item of items) {
+      const targets: string[] = item.menuItem?.printCategories?.length
+        ? item.menuItem.printCategories
+        : [item.menuItem?.category ?? item.category];
+      for (const cat of targets) {
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(item);
+      }
+    }
+
+    await Promise.allSettled(
+      Object.entries(byCategory).map(async ([cat, catItems]) => {
+        const isTemplated = cat === 'kitchen' || cat === 'bar';
+        const template = isTemplated
+          ? await this.getTemplate(cat as TemplateType)
+          : { enabled: true, config: DEFAULT_CONFIGS.kitchen };
+        if (!template.enabled) return;
+
+        const printer = await this.getPrinter(cat);
+        if (!printer || !printer.enabled) {
+          this.logger.warn(`Impressora ${cat} não configurada ou desativada`);
+          return;
+        }
+        const ticket = this.buildOrderTicket(comanda, catItems, cat, template.config);
+        await this.escPos.send(printer.ip, printer.port, ticket);
+        this.logger.log(`Pedido impresso em ${cat} (${printer.ip})`);
+      }),
+    );
+  }
+
+  async printReceipt(comanda: any, payments: any[], total: number) {
+    const printer = await this.getPrinter('cashier');
+    if (!printer || !printer.enabled) {
+      this.logger.warn('Impressora caixa não configurada');
+      return;
+    }
+
+    const receiptTemplate = await this.getTemplate('receipt');
+    if (receiptTemplate.enabled) {
+      const ticket = this.buildReceiptTicket(comanda, payments, total, receiptTemplate.config);
+      await this.escPos.send(printer.ip, printer.port, ticket);
+      this.logger.log(`Recibo impresso (${printer.ip})`);
+    }
+
+    const fiscalTemplate = await this.getTemplate('fiscal');
+    if (fiscalTemplate.enabled) {
+      const fiscalTicket = this.buildFiscalTicket(comanda, payments, total, fiscalTemplate.config);
+      await this.escPos.send(printer.ip, printer.port, fiscalTicket);
+      this.logger.log(`Cupom fiscal impresso (${printer.ip})`);
+    }
+  }
+
+  async printSummary(comanda: any) {
+    const printer = await this.getPrinter('cashier');
+    if (!printer || !printer.enabled) throw new Error(`Impressora 'cashier' não configurada ou desativada`);
+    const ticket = this.buildSummaryTicket(comanda);
+    await this.escPos.send(printer.ip, printer.port, ticket);
+    this.logger.log(`Resumo de conferência impresso (${printer.ip})`);
+  }
+
+  async printMergeReceipt(table: any, snapshot: any[], merged: any) {
+    const printer = await this.getPrinter('cashier');
+    if (!printer || !printer.enabled) throw new Error(`Impressora 'cashier' não configurada ou desativada`);
+    const ticket = this.buildMergeReceiptTicket(table, snapshot, merged);
+    await this.escPos.send(printer.ip, printer.port, ticket);
+    this.logger.log(`Comprovante de junção impresso (${printer.ip})`);
+  }
+
+  async printTest(category: string, printer: { ip: string; port: number; label?: string | null }) {
+    const label  = printer.label ?? category.toUpperCase();
+    const now    = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const ticket = Buffer.concat([
+      CMD.INIT, CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_HEIGHT,
+      txt(`BODOGAMI\n`), CMD.NORMAL_SIZE, CMD.BOLD_OFF,
+      txt(`TESTE DE IMPRESSORA\n`), line('='),
+      CMD.ALIGN_LEFT,
+      txt(`Local : ${label}\n`),
+      txt(`IP    : ${printer.ip}:${printer.port}\n`),
+      txt(`Hora  : ${now}\n`),
+      line('='),
+      CMD.ALIGN_CENTER, txt(`Impressora OK!\n`),
+      CMD.LF, CMD.LF, CMD.CUT_PARTIAL,
+    ]);
+    await this.escPos.send(printer.ip, printer.port, ticket);
+    this.logger.log(`Teste impresso em ${label} (${printer.ip})`);
+  }
+
+  async printTemplateSample(type: string, override: { enabled?: boolean; config?: Record<string, any> }) {
+    if (!isTemplateType(type)) throw new BadRequestException(`Tipo de modelo inválido: ${type}`);
+    const cfg = { ...DEFAULT_CONFIGS[type as TemplateType], ...(override.config ?? {}) };
+
+    const sampleComanda: any = {
+      number: 42, table: { label: 'Mesa 5' }, customerName: 'Cliente Teste',
+      user: { name: 'Garçom Teste' }, surchargeType: 'percent', surchargeValue: 10,
+      discountType: 'fixed', discountValue: 2,
+    };
+    const sampleItems    = [
+      { quantity: 2, notes: 'sem cebola', unitPrice: 20, menuItem: { name: 'Ramen Shoyu' } },
+      { quantity: 1, notes: '',           unitPrice: 16, menuItem: { name: 'Cerveja Asahi' } },
+    ];
+    const samplePayments = [{ method: 'CASH', amount: 56 }];
+    const sampleTotal    = sampleItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+
+    const printerCategory = (type === 'receipt' || type === 'fiscal') ? 'cashier' : type;
+    const printer = await this.getPrinter(printerCategory);
+    if (!printer || !printer.enabled) throw new Error(`Impressora '${printerCategory}' não configurada ou desativada`);
+
+    let ticket: Buffer;
+    if (type === 'kitchen' || type === 'bar') {
+      ticket = this.buildOrderTicket(sampleComanda, sampleItems, type, cfg);
+    } else if (type === 'receipt') {
+      ticket = this.buildReceiptTicket({ ...sampleComanda, items: sampleItems }, samplePayments, sampleTotal, cfg);
+    } else {
+      ticket = this.buildFiscalTicket(sampleComanda, samplePayments, sampleTotal, cfg);
+    }
+    await this.escPos.send(printer.ip, printer.port, ticket);
+  }
+
+  // ── Builders (lógica pura de montagem de tickets ESC/POS) ─────────────────
+
+  private buildOrderTicket(comanda: any, items: any[], category: string, cfg: Record<string, any>): Buffer {
+    const area = category.toUpperCase();
+    const now  = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const parts: Buffer[] = [
+      CMD.INIT, CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_HEIGHT,
+      txt(`BODOGAMI\n`), CMD.NORMAL_SIZE, CMD.BOLD_OFF,
+      txt(`${area}\n`), line('='),
+      CMD.ALIGN_LEFT,
+      CMD.BOLD_ON, txt(`Mesa: ${comanda.table?.label ?? '-'}\n`), CMD.BOLD_OFF,
+    ];
+    if (cfg.showCliente && comanda.customerName) parts.push(txt(`Cliente: ${comanda.customerName}\n`));
+    if (cfg.showComanda) parts.push(txt(`Comanda: #${comanda.number}\n`));
+    if (cfg.showGarcom && comanda.user?.name) parts.push(txt(`Garçom: ${comanda.user.name}\n`));
+    parts.push(txt(`${now}\n`), line('-'));
+    for (const item of items) {
+      const name = item.menuItem?.name ?? item.name;
+      parts.push(CMD.BOLD_ON, txt(`${item.quantity}x  ${name}\n`), CMD.BOLD_OFF);
+      if (cfg.showObservacoes && item.notes) parts.push(txt(`    >> ${item.notes}\n`));
+    }
+    parts.push(line('='));
+    if (cfg.footerText) parts.push(CMD.ALIGN_CENTER, txt(`${cfg.footerText}\n`), CMD.ALIGN_LEFT);
+    parts.push(CMD.LF, CMD.LF, cfg.cutMode === 'full' ? CMD.CUT_FULL : CMD.CUT_PARTIAL);
+    return Buffer.concat(parts);
+  }
+
+  private buildReceiptTicket(comanda: any, payments: any[], total: number, cfg: Record<string, any>): Buffer {
+    const now   = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const items = comanda.items ?? [];
+    const subtotal = items.reduce((s: number, i: any) => s + Number(i.unitPrice) * i.quantity, 0);
+    const parts: Buffer[] = [
+      CMD.INIT, CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_HEIGHT,
+      txt(`${cfg.storeName || 'BODOGAMI'}\n`), CMD.NORMAL_SIZE, CMD.BOLD_OFF,
+    ];
+    if (cfg.headerText) parts.push(txt(`${cfg.headerText}\n`));
+    if (cfg.showEndereco && cfg.endereco) parts.push(txt(`${cfg.endereco}\n`));
+    parts.push(txt(`RECIBO\n`), line('='), CMD.ALIGN_LEFT, txt(`Mesa: ${comanda.table?.label ?? '-'}\n`));
+    if (comanda.customerName) parts.push(txt(`Cliente: ${comanda.customerName}\n`));
+    parts.push(txt(`Comanda: #${comanda.number}   ${now}\n`), line('-'));
+    for (const item of items) {
+      const name  = (item.menuItem?.name ?? item.name ?? '').slice(0, 20).padEnd(20);
+      const qty   = `${item.quantity}x`.padStart(3);
+      const price = fmtBRL(Number(item.unitPrice) * item.quantity);
+      parts.push(txt(`${qty} ${name} ${price}\n`));
+    }
+    parts.push(line('-'), txt(`${'Subtotal'.padEnd(23)}${fmtBRL(subtotal)}\n`));
+    if (cfg.showTaxaServico && parseFloat(comanda.surchargeValue) > 0 && comanda.surchargeType) {
+      const v = comanda.surchargeType === 'percent'
+        ? serviceFeeBase(items) * parseFloat(comanda.surchargeValue) / 100
+        : parseFloat(comanda.surchargeValue);
+      parts.push(txt(`${'Taxa de servico'.padEnd(23)}${fmtBRL(v)}\n`));
+    }
+    if (cfg.showDesconto && parseFloat(comanda.discountValue) > 0 && comanda.discountType) {
+      const v = comanda.discountType === 'percent'
+        ? subtotal * parseFloat(comanda.discountValue) / 100
+        : parseFloat(comanda.discountValue);
+      parts.push(txt(`${'Desconto'.padEnd(23)}-${fmtBRL(v).trim()}\n`));
+    }
+    parts.push(line('='), CMD.BOLD_ON, txt(`${'TOTAL'.padEnd(23)}${fmtBRL(total)}\n`), CMD.BOLD_OFF, line('-'));
+    const methodLabel: Record<string, string> = { CASH: 'DINHEIRO', CARD: 'CARTAO', PIX: 'PIX', VOUCHER: 'VOUCHER' };
+    for (const p of payments) {
+      parts.push(txt(`${(methodLabel[p.method] ?? p.method).padEnd(23)}${fmtBRL(Number(p.amount))}\n`));
+    }
+    if (cfg.showAssinatura) {
+      parts.push(line('-'), CMD.LF, txt('_'.repeat(28) + '\n'), CMD.ALIGN_CENTER, txt('Assinatura cliente\n'), CMD.ALIGN_LEFT);
+    }
+    parts.push(line('='), CMD.ALIGN_CENTER);
+    if (cfg.footerText) parts.push(txt(`${cfg.footerText}\n`));
+    parts.push(CMD.LF, CMD.LF, cfg.cutMode === 'full' ? CMD.CUT_FULL : CMD.CUT_PARTIAL);
+    return Buffer.concat(parts);
+  }
+
+  private buildFiscalTicket(comanda: any, payments: any[], total: number, cfg: Record<string, any>): Buffer {
+    const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const parts: Buffer[] = [
+      CMD.INIT, CMD.ALIGN_CENTER, CMD.BOLD_ON,
+      txt(`${cfg.razaoSocial || 'Bodogami Ltda'}\n`), CMD.BOLD_OFF,
+      txt(`CNPJ: ${cfg.cnpj || ''}\n`),
+    ];
+    if (cfg.endereco) parts.push(txt(`${cfg.endereco}\n`));
+    parts.push(
+      line('='), CMD.BOLD_ON, txt(`CUPOM FISCAL\n`), CMD.BOLD_OFF, line('='),
+      CMD.ALIGN_LEFT, txt(`Comanda: #${comanda.number}   ${now}\n`), line('-'),
+      CMD.ALIGN_CENTER, CMD.BOLD_ON, txt(`${'TOTAL'.padEnd(10)}${fmtBRL(total)}\n`), CMD.BOLD_OFF, line('-'),
+    );
+    if (cfg.footerText) parts.push(txt(`${cfg.footerText}\n`));
+    parts.push(CMD.LF, CMD.LF, cfg.cutMode === 'full' ? CMD.CUT_FULL : CMD.CUT_PARTIAL);
+    return Buffer.concat(parts);
+  }
+
+  private buildSummaryTicket(comanda: any): Buffer {
+    const now   = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const items = comanda.items ?? [];
+    const subtotal = items.reduce((s: number, i: any) => s + Number(i.unitPrice) * i.quantity, 0);
+    const feeBase  = serviceFeeBase(items);
+    let total = subtotal;
+    const sv = Number(comanda.surchargeValue ?? 0);
+    const dv = Number(comanda.discountValue  ?? 0);
+    if (sv > 0 && comanda.surchargeType) total += comanda.surchargeType === 'percent' ? feeBase * sv / 100 : sv;
+    if (dv > 0 && comanda.discountType)  total -= comanda.discountType  === 'percent' ? subtotal * dv / 100 : dv;
+    const parts: Buffer[] = [
+      CMD.INIT, CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_HEIGHT,
+      txt(`BODOGAMI\n`), CMD.NORMAL_SIZE, CMD.BOLD_OFF,
+      txt(`RESUMO PARA CONFERENCIA\n`), line('='), CMD.ALIGN_LEFT,
+      txt(`Mesa: ${comanda.table?.label ?? '-'}\n`),
+    ];
+    if (comanda.customerName) parts.push(txt(`Cliente: ${comanda.customerName}\n`));
+    parts.push(txt(`Comanda: #${comanda.number}   ${now}\n`), line('-'));
+    for (const item of items) {
+      const name  = (item.menuItem?.name ?? item.name ?? '').slice(0, 20).padEnd(20);
+      const qty   = `${item.quantity}x`.padStart(3);
+      const price = fmtBRL(Number(item.unitPrice) * item.quantity);
+      parts.push(txt(`${qty} ${name} ${price}\n`));
+    }
+    parts.push(line('-'), txt(`${'Subtotal'.padEnd(23)}${fmtBRL(subtotal)}\n`));
+    if (sv > 0 && comanda.surchargeType) {
+      const v = comanda.surchargeType === 'percent' ? feeBase * sv / 100 : sv;
+      parts.push(txt(`${'Taxa de servico'.padEnd(23)}${fmtBRL(v)}\n`));
+    }
+    if (dv > 0 && comanda.discountType) {
+      const v = comanda.discountType === 'percent' ? subtotal * dv / 100 : dv;
+      parts.push(txt(`${'Desconto'.padEnd(23)}-${fmtBRL(v).trim()}\n`));
+    }
+    parts.push(
+      line('='), CMD.BOLD_ON, txt(`${'TOTAL PARCIAL'.padEnd(23)}${fmtBRL(total)}\n`), CMD.BOLD_OFF,
+      line('='), CMD.ALIGN_CENTER,
+      txt(`Documento sem valor fiscal\n`), txt(`Apenas para conferencia\n`),
+      CMD.LF, CMD.LF, CMD.CUT_PARTIAL,
+    );
+    return Buffer.concat(parts);
+  }
+
+  private buildMergeReceiptTicket(table: any, snapshot: any[], merged: any): Buffer {
+    const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const parts: Buffer[] = [
+      CMD.INIT, CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_HEIGHT,
+      txt(`BODOGAMI\n`), CMD.NORMAL_SIZE, CMD.BOLD_OFF,
+      txt(`COMPROVANTE DE JUNCAO\n`), line('='), CMD.ALIGN_LEFT,
+      txt(`Mesa: ${table?.label ?? '-'}\n`), txt(`${now}\n`), line('-'),
+    ];
+    for (const c of snapshot) {
+      parts.push(CMD.BOLD_ON, txt(`Comanda #${c.number}${c.customerName ? ' - ' + c.customerName : ''}\n`), CMD.BOLD_OFF);
+      for (const item of c.items) {
+        parts.push(txt(`  ${item.quantity}x  ${item.name}\n`));
+        if (item.notes) parts.push(txt(`      >> ${item.notes}\n`));
+      }
+      parts.push(txt(`  Subtotal: ${fmtBRL(c.subtotal)}\n`), line('-'));
+    }
+    const mergedSubtotal = (merged.items ?? []).reduce((s: number, i: any) => s + Number(i.unitPrice) * i.quantity, 0);
+    parts.push(
+      CMD.BOLD_ON, txt(`Comandas unificadas em #${merged.number}\n`), CMD.BOLD_OFF,
+      txt(`Novo subtotal total: ${fmtBRL(mergedSubtotal)}\n`),
+      line('='), CMD.ALIGN_CENTER, txt(`Comprovante interno - sem valor fiscal\n`),
+      CMD.LF, CMD.LF, CMD.CUT_PARTIAL,
+    );
+    return Buffer.concat(parts);
+  }
+}

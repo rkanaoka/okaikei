@@ -59,7 +59,7 @@ export default function NotionExtrato() {
   const summary = results
     ? {
         criado: results.filter((r) => r.status === 'criado').length,
-        atualizado: results.filter((r) => r.status === 'atualizado').length,
+        ignorado: results.filter((r) => r.status === 'ignorado').length,
         erro: results.filter((r) => r.status === 'erro').length,
       }
     : null;
@@ -142,7 +142,7 @@ export default function NotionExtrato() {
           {summary && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               <Badge label={`${summary.criado} criados`} bg="#e6f1ea" fg={BRAND.green} />
-              <Badge label={`${summary.atualizado} atualizados`} bg="#e8eef5" fg="#33587d" />
+              {summary.ignorado > 0 && <Badge label={`${summary.ignorado} já existiam (ignorados)`} bg="#e8eef5" fg="#33587d" />}
               {summary.erro > 0 && <Badge label={`${summary.erro} com erro`} bg="#fbe9e5" fg={BRAND.red} />}
             </div>
           )}
