@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
-import { CashService } from '@/modules/cash/application/use-cases/cash.service';
+import { CashService } from '@/modules/ponto-de-venda/application/use-cases/cash.service';
 import { CashMovementType } from '@prisma/client';
 
 @Controller('cash')

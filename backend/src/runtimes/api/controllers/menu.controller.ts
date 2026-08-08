@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
-import { MenuService } from '@/modules/menu/application/use-cases/menu.service';
+import { MenuService } from '@/modules/ponto-de-venda/application/use-cases/menu.service';
 
 @Controller('menu')
 export class MenuController {

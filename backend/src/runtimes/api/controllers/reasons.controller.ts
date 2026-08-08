@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body } from '@nestjs/common';
-import { ReasonsService } from '@/modules/reasons/application/use-cases/reasons.service';
+import { ReasonsService } from '@/modules/ponto-de-venda/application/use-cases/reasons.service';
 
 @Controller('reasons')
 export class ReasonsController {

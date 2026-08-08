@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Get, Param } from '@nestjs/common';
-import { PrintingService } from '@/modules/printing/application/use-cases/printing.service';
+import { PrintingService } from '@/modules/ponto-de-venda/application/use-cases/printing.service';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 
 @Controller('print')

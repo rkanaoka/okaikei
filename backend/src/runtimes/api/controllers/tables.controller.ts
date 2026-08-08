@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Put, Param, Body } from '@nestjs/common';
-import { TablesService } from '@/modules/tables/application/use-cases/tables.service';
+import { TablesService } from '@/modules/ponto-de-venda/application/use-cases/tables.service';
 
 @Controller('tables')
 export class TablesController {

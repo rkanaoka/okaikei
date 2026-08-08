@@ -1,11 +1,34 @@
-.next
-node_modules
+# ── Build outputs ──────────────────────────────────────
+.next/
+backend/dist/
+frontend/dist/
+
+# ── Dependências ───────────────────────────────────────
+node_modules/
+
+# ── Variáveis de ambiente ──────────────────────────────
 .env
 .env.development
-.build.log
-pratos.txt
+.env.local
+
+# ── Dados e volumes Docker ─────────────────────────────
 data/
 persistent/
+backup/
+
+# ── TypeScript ─────────────────────────────────────────
+*.tsbuildinfo
+
+# ── Runtime (logs, pids) ───────────────────────────────
+*.log
+**/.server.pid
+.build.log
+**/.server.log
+
+# ── Dados de teste / legado ────────────────────────────
+pratos.txt
+# Seed de teste — não aplicar em produção
 infra/migrations/2_seed_test_items.js
-notion-faturamento/backend/.server.pid
-notion-faturamento/backend/.server.log
+
+# ── Claude IA ────────────────────────────
+skills-lock.json

@@ -16,6 +16,7 @@ import MotivosDesconto      from './admin/MotivosDesconto';
 import Vouchers             from './admin/Vouchers';
 import ModelosImpressao     from './admin/ModelosImpressao';
 import ConfigLoja           from './admin/ConfigLoja';
+import GerarEtiquetas       from './admin/GerarEtiquetas';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SectionId =
@@ -24,7 +25,7 @@ type SectionId =
   | 'fin-pagamentos' | 'fin-gorjetas' | 'fin-frentes-caixa'
   | 'rel-clientes'   | 'rel-cupons'
   | 'rel-itens'      | 'rel-faturamento' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
-  | 'estoque'
+  | 'estoque-etiquetas'
   | 'config-loja'    | 'config-horarios' | 'config-fiscal'
   | 'config-cancelamento' | 'config-desconto' | 'config-impressao';
 
@@ -53,7 +54,9 @@ const NAV: Array<
     { id:'rel-faturamento-notion', label:'Importar Faturamento (Notion)' },
     { id:'rel-extrato-notion',     label:'Importar Extrato Bancário (Notion)' },
   ]},
-  { type:'link',  id:'estoque', label:'Estoque', icon:'📦' },
+  { type:'group', label:'Estoque', icon:'📦', items:[
+    { id:'estoque-etiquetas', label:'Gerar Etiquetas de Validade' },
+  ]},
   { type:'group', label:'Configurações', icon:'⚙️', items:[
     { id:'config-loja',          label:'Dados da loja' },
     { id:'config-horarios',      label:'Horários de funcionamento' },
@@ -110,7 +113,7 @@ function renderSection(id: SectionId) {
         </Link>
       </div>
     );
-    case 'estoque':             return <EmptyPlaceholder icon="📦" title="Estoque" subtitle="Fichas técnicas e controle de insumos — em breve" />;
+    case 'estoque-etiquetas':   return <GerarEtiquetas />;
     case 'config-loja':         return <ConfigLoja />;
     case 'config-horarios':     return <EmptyPlaceholder icon="🕐" title="Horários de Funcionamento" subtitle="Módulo em desenvolvimento" />;
     case 'config-fiscal':       return <EmptyPlaceholder icon="📄" title="Dados Fiscais" subtitle="Módulo em desenvolvimento" />;
@@ -126,7 +129,7 @@ export default function Admin() {
   const [section, setSection]     = useState<SectionId>('dashboard');
   const [openGroups, setOpenGroups] = useState<Record<string,boolean>>({
     'Cardápio': false, 'Financeiro': false, 'Relacionamentos': false,
-    'Relatórios': false, 'Configurações': false,
+    'Relatórios': false, 'Estoque': false, 'Configurações': false,
   });
 
   function toggle(label: string) {

@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
-import { OptionGroupsService } from '@/modules/option-groups/application/use-cases/option-groups.service';
+import { OptionGroupsService } from '@/modules/ponto-de-venda/application/use-cases/option-groups.service';
 
 @Controller('option-groups')
 export class OptionGroupsController {

@@ -142,6 +142,15 @@ export const printTemplatesApi = {
     http.post(`/print-templates/${type}/test`, d),
 };
 
+// ── Etiquetas de Validade (Controle de Estoque) ───────────────────────────────
+export const etiquetasApi = {
+  status: () => http.get('/estoque/etiquetas/status'),
+  print:  (d: {
+    produto: string; fabricante: string; lote: string; sif: string;
+    dataManip: string; dataValidade: string; responsavel: string; quantidade: number;
+  }) => http.post('/estoque/etiquetas/print', d),
+};
+
 // ── Sync ──────────────────────────────────────────────────────────────────────
 export const syncApi = {
   status: () => http.get('/sync/status'),

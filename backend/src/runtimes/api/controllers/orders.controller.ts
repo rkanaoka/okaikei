@@ -1,7 +1,7 @@
 import {
   Controller, Get, Post, Put, Delete, Param, Body, Query, HttpCode,
 } from '@nestjs/common';
-import { OrdersService } from '@/modules/orders/application/use-cases/orders.service';
+import { OrdersService } from '@/modules/ponto-de-venda/application/use-cases/orders.service';
 import { ComandaStatus, PaymentMethod } from '@prisma/client';
 
 @Controller('comandas')

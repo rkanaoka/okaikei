@@ -1,6 +1,6 @@
 import { Controller, Get, Put, Post, Param, Body } from '@nestjs/common';
-import { PrintTemplatesService } from '@/modules/print-templates/application/use-cases/print-templates.service';
-import { PrintingService } from '@/modules/printing/application/use-cases/printing.service';
+import { PrintTemplatesService } from '@/modules/ponto-de-venda/application/use-cases/print-templates.service';
+import { PrintingService } from '@/modules/ponto-de-venda/application/use-cases/printing.service';
 
 @Controller('print-templates')
 export class PrintTemplatesController {

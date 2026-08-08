@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Put, Body, Param } from '@nestjs/common';
-import { VouchersService } from '@/modules/vouchers/application/use-cases/vouchers.service';
+import { VouchersService } from '@/modules/ponto-de-venda/application/use-cases/vouchers.service';
 
 @Controller('vouchers')
 export class VouchersController {
