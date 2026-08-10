@@ -81,14 +81,15 @@ jobs:
 
             # Aguarda os serviços ficarem healthy
             echo ">>> Aguardando serviços..."
-            sleep 10
+            sleep 15
 
             # Verifica status
             docker compose -f docker-compose.hostinger.yml ps
 
-            # Health check da API
+            # Health check da API (dentro do container — não depende de porta publicada)
             echo ">>> Health check..."
-            curl -sf http://localhost:4000/health && echo "API: OK" || echo "API: FALHOU"
+            docker exec okaikei_vps_api wget -qO- http://localhost:4000/health \
+              && echo "API: OK" || echo "API: FALHOU (verifique os logs)"
 
             # Limpa imagens antigas
             docker image prune -f

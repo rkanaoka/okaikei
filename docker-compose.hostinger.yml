@@ -60,6 +60,11 @@ services:
       LOCAL_BACKEND_URL: ${LOCAL_BACKEND_URL}
       LOCAL_API_KEY: ${LOCAL_API_KEY}
       CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+    # Porta publicada apenas no loopback — não exposta na internet.
+    # Necessário para health check do host e para o Traefik (host mode)
+    # conseguir alcançar o serviço via 127.0.0.1:4000.
+    ports:
+      - "127.0.0.1:4000:4000"
     networks:
       - okaikei_internal
     depends_on:
