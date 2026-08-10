@@ -1,25 +1,22 @@
 # ─── Bodogami — VPS Hostinger (Cardápio Digital) ──────────────────────────────
-# Versão adaptada para o Docker Manager da Hostinger com Traefik integrado.
-# NÃO usa nginx próprio — o Traefik da Hostinger gerencia SSL e roteamento.
+# Configuração para o Docker Manager da Hostinger onde o Traefik roda em
+# network_mode: host — NÃO existe rede Docker compartilhada com o Traefik.
+#
+# Como funciona:
+#   - Traefik usa network_mode: host e descobre containers via Docker socket.
+#   - Ele alcança cada container pelo IP do bridge (ex: 172.x.x.x) diretamente.
+#   - Nossos containers ficam apenas na rede interna okaikei_internal.
+#   - Os labels traefik.* são suficientes para o roteamento — sem rede externa.
 #
 # Deploy:
 #   docker compose -f docker-compose.hostinger.yml --env-file .env.vps up -d --build
-#
-# Antes do primeiro deploy, descubra o nome da rede do Traefik:
-#   docker network ls | grep traefik
-# e ajuste o campo `name:` em networks.traefik abaixo se necessário.
 # ─────────────────────────────────────────────────────────────────────────────
 
 networks:
-  # Rede interna entre os containers do Okaikei
+  # Rede interna entre os containers do Okaikei.
+  # O Traefik (host mode) alcança os containers pelo IP desta bridge via socket.
   okaikei_internal:
     driver: bridge
-
-  # Rede externa do Traefik (gerenciada pela Hostinger).
-  # Verifique o nome exato com: docker network ls | grep traefik
-  traefik:
-    external: true
-    name: ${TRAEFIK_NETWORK:-traefik_default}
 
 volumes:
   redis_vps_data:
@@ -47,7 +44,8 @@ services:
       retries: 5
 
   # ── VPS API (gateway + cache) ─────────────────────────────────────────────────
-  # Rotas: /api/* → vps-api (prioridade 10)
+  # /api/*      → vps-api (prioridade 10)
+  # /internal/* → vps-api (prioridade 20, restrito ao IP WireGuard)
   vps-api:
     build:
       context: ./vps-api
@@ -64,27 +62,25 @@ services:
       CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
     networks:
       - okaikei_internal
-      - traefik
     depends_on:
       redis:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik_default}"
-      # Rota /api/* → vps-api (prioridade alta)
+      # Rota pública: /api/* → vps-api (prioridade alta)
       - "traefik.http.routers.okaikei-api.rule=Host(`${CARDAPIO_DOMAIN:-cardapio.bodogami.tech}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.okaikei-api.entrypoints=websecure"
       - "traefik.http.routers.okaikei-api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.okaikei-api.priority=10"
       - "traefik.http.services.okaikei-api.loadbalancer.server.port=4000"
-      # /internal/* → vps-api, mas bloqueado a IPs externos (middleware IP whitelist)
+      # Rota interna: /internal/* → vps-api (restrito ao IP WireGuard)
       - "traefik.http.routers.okaikei-internal.rule=Host(`${CARDAPIO_DOMAIN:-cardapio.bodogami.tech}`) && PathPrefix(`/internal`)"
       - "traefik.http.routers.okaikei-internal.entrypoints=websecure"
       - "traefik.http.routers.okaikei-internal.tls.certresolver=letsencrypt"
       - "traefik.http.routers.okaikei-internal.priority=20"
       - "traefik.http.routers.okaikei-internal.middlewares=vpn-only@docker"
       - "traefik.http.services.okaikei-internal.loadbalancer.server.port=4000"
-      # Middleware: libera /internal apenas para IPs WireGuard (ajuste o range)
+      # Middleware: libera /internal apenas para IPs WireGuard
       - "traefik.http.middlewares.vpn-only.ipwhitelist.sourcerange=${WIREGUARD_CIDR:-10.0.0.0/8}"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
@@ -93,7 +89,7 @@ services:
       retries: 3
 
   # ── Cardápio App (SPA React) ──────────────────────────────────────────────────
-  # Rotas: /* → cardapio-app (prioridade baixa / catch-all)
+  # /* → cardapio-app (prioridade baixa / catch-all)
   cardapio-app:
     build:
       context: ./cardapio-app
@@ -103,10 +99,8 @@ services:
     restart: unless-stopped
     networks:
       - okaikei_internal
-      - traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik_default}"
       # Catch-all para o domínio (prioridade baixa — /api/* vai para vps-api)
       - "traefik.http.routers.okaikei-app.rule=Host(`${CARDAPIO_DOMAIN:-cardapio.bodogami.tech}`)"
       - "traefik.http.routers.okaikei-app.entrypoints=websecure"
