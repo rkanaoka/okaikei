@@ -1,0 +1,106 @@
+# ─── CI/CD — Cardápio Digital → VPS Hostinger ─────────────────────────────────
+# Dispara em push para `main` quando arquivos do cardápio forem alterados.
+# Faz SSH na VPS, puxa o repositório, rebuilda e sobe os containers.
+#
+# Segredos necessários no GitHub (Settings → Secrets → Actions):
+#   VPS_HOST      → IP ou hostname da VPS (ex: srv1666726.hstgr.cloud)
+#   VPS_USER      → usuário SSH da VPS (ex: root ou ubuntu)
+#   VPS_SSH_KEY   → chave SSH privada (conteúdo do arquivo id_ed25519)
+#   VPS_DEPLOY_PATH → caminho do repositório na VPS (ex: /opt/okaikei)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy — Cardápio Digital VPS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cardapio-app/**'
+      - 'vps-api/**'
+      - 'docker-compose.hostinger.yml'
+      - '.github/workflows/deploy-vps.yml'
+
+  # Permite disparar manualmente pelo painel do GitHub Actions
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy na VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # 1. Checkout do código
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Verificar arquivos alterados (para log)
+      - name: Arquivos alterados
+        run: |
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Autor: ${{ github.actor }}"
+
+      # 3. Deploy via SSH
+      - name: Deploy na VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          # Timeout de conexão SSH
+          connect_timeout: 30s
+          script: |
+            set -e
+
+            echo "=== Iniciando deploy Okaikei ==="
+            echo "Hora: $(date)"
+
+            # Navega para o diretório do projeto
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+
+            # Pull do repositório
+            echo ">>> git pull..."
+            git fetch --all
+            git reset --hard origin/main
+            git pull origin main
+
+            # Rebuild apenas dos serviços alterados
+            echo ">>> docker compose build..."
+            docker compose -f docker-compose.hostinger.yml \
+              --env-file .env.vps \
+              build --no-cache cardapio-app vps-api
+
+            # Sobe os containers (recria apenas o que mudou)
+            echo ">>> docker compose up -d..."
+            docker compose -f docker-compose.hostinger.yml \
+              --env-file .env.vps \
+              up -d --remove-orphans
+
+            # Aguarda os serviços ficarem healthy
+            echo ">>> Aguardando serviços..."
+            sleep 10
+
+            # Verifica status
+            docker compose -f docker-compose.hostinger.yml ps
+
+            # Health check da API
+            echo ">>> Health check..."
+            curl -sf http://localhost:4000/health && echo "API: OK" || echo "API: FALHOU"
+
+            # Limpa imagens antigas
+            docker image prune -f
+
+            echo "=== Deploy concluído! ==="
+
+      # 4. Notificação de sucesso/falha (opcional — adicione webhook de Slack/Discord aqui)
+      - name: Status do deploy
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Deploy realizado com sucesso!"
+          else
+            echo "❌ Deploy falhou. Verifique os logs acima."
+          fi

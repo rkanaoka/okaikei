@@ -109,7 +109,11 @@ services:
     # node_modules é volume anônimo — sempre que o container é recriado ele volta
     # ao estado da imagem, perdendo o Prisma Client de um `db push`/`generate` manual.
     # Gerar o client no boot garante que ele nunca fique desatualizado com o schema.
-    command: sh -c "npx prisma generate && npm run start:dev"
+    # `db push` sincroniza o schema automaticamente ao subir o ambiente — o projeto
+    # ainda não tem migrations Prisma geradas (ver database/CLAUDE.md), então esse é
+    # o fluxo de dev atual. --accept-data-loss evita travar esperando confirmação
+    # num terminal não-interativo; banco local de dev, perda de dado ali é aceitável.
+    command: sh -c "npx prisma generate && npx prisma db push --accept-data-loss && npm run start:dev"
 
   # ── Frontend (React + Vite) ───────────────────────────────────────────────────
   frontend:

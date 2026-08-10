@@ -11,6 +11,7 @@ import { PontoDeVendaModule }    from '@/modules/ponto-de-venda/ponto-de-venda.m
 import { SyncModule }            from '@/modules/sync/sync.module';
 import { ConfigsModule }         from '@/modules/config/config.module';
 import { ControleEstoqueModule } from '@/modules/controle-estoque/controle-estoque.module';
+import { CardapioDigitalModule } from '@/modules/cardapio-digital/cardapio-digital.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ControleEstoqueModule } from '@/modules/controle-estoque/controle-estoq
     SyncModule,
     ConfigsModule,
     ControleEstoqueModule,
+    CardapioDigitalModule,
   ],
 })
 export class AppModule {}
