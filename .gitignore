@@ -34,5 +34,9 @@ infra/migrations/2_seed_test_items.js
 .env.vps
 docker/nginx-vps/ssl/
 
+# ── Produção (servidor local) ───────────────────────────────────────────────────
+# Só existe no servidor real — evita expor topologia/comandos de produção no repo.
+Makefile.prod
+
 # ── Claude IA ────────────────────────────
 skills-lock.json

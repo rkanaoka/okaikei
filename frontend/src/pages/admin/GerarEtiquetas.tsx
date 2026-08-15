@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { BRAND, Card, PageHeader, Btn } from './shared';
-import { etiquetasApi } from '../../services/api';
+import { etiquetasApi, EtiquetaLayoutConfig, EtiquetaValidadeInput } from '../../services/api';
 
 // ── tipos ──────────────────────────────────────────────────────────────────────
 interface FormState {
@@ -23,13 +23,93 @@ const EMPTY: FormState = {
   dataManip: '', dataValidade: '', responsavel: '', quantidade: 1,
 };
 
-// ── layout preview da etiqueta 60×30 mm (escala 4× para tela) ─────────────────
-function EtiquetaPreview({ f }: { f: FormState }) {
-  const W = 480, H = 240; // dots
+// Deve espelhar backend: gerar-etiquetas-validade/etiqueta-layout-defaults.ts
+const DEFAULT_LAYOUT: EtiquetaLayoutConfig = {
+  offsetX: 0, offsetY: 0,
+  marginLeft: 10, marginRight: 10, marginTop: 8, marginBottom: 8,
+  fontSizeProduto: 20, fontSizeInfo: 13, fontSizeValidade: 26, fontSizeResponsavel: 12,
+  lineGap: 4,
+};
+
+// ── layout preview da etiqueta 60×30 mm — espelha buildZpl() do backend em dots ──
+function EtiquetaPreview({ f, layout }: { f: FormState; layout: EtiquetaLayoutConfig }) {
+  const W = 480, H = 240; // dots — 1:1 com o grid ZPL (203 dpi, 60×30 mm)
   const scale = 0.8;
+  const L = layout;
 
   const abbr = (v: string, max: number) =>
     v.length > max ? v.substring(0, max) + '…' : v;
+  // FO usa o canto superior-esquerdo do texto; SVG <text> usa a linha de base.
+  const baseline = (topY: number, fontSize: number) => topY + Math.round(fontSize * 0.92);
+
+  const x0 = L.marginLeft + L.offsetX;
+  const contentWidth = Math.max(1, 480 - L.marginLeft - L.marginRight);
+  const xSif = x0 + Math.round(contentWidth * 0.6);
+
+  let y = L.marginTop + L.offsetY;
+  const rows: React.ReactNode[] = [];
+
+  const yProduto = y;
+  rows.push(
+    <text key="produto" x={x0} y={baseline(yProduto, L.fontSizeProduto)}
+      fontSize={L.fontSizeProduto} fontWeight="bold" fontFamily="monospace" fill="#000">
+      {abbr(f.produto || 'PRODUTO', 28)}
+    </text>
+  );
+  y += L.fontSizeProduto + L.lineGap;
+
+  rows.push(<line key="sep1" x1={x0} y1={y} x2={x0 + contentWidth} y2={y} stroke="#000" strokeWidth={1} />);
+  y += L.lineGap;
+
+  const yInfo1 = y;
+  rows.push(
+    <text key="fab" x={x0} y={baseline(yInfo1, L.fontSizeInfo)} fontSize={L.fontSizeInfo} fontFamily="monospace" fill="#333">
+      {`Fab: ${abbr(f.fabricante || 'Fabricante', 18)}`}
+    </text>
+  );
+  rows.push(
+    <text key="sif" x={xSif} y={baseline(yInfo1, L.fontSizeInfo)} fontSize={L.fontSizeInfo} fontFamily="monospace" fill="#333">
+      {`SIF: ${abbr(f.sif || '—', 8)}`}
+    </text>
+  );
+  y += L.fontSizeInfo + L.lineGap;
+
+  rows.push(
+    <text key="lote" x={x0} y={baseline(y, L.fontSizeInfo)} fontSize={L.fontSizeInfo} fontFamily="monospace" fill="#333">
+      {`Lote: ${abbr(f.lote || '—', 22)}`}
+    </text>
+  );
+  y += L.fontSizeInfo + L.lineGap;
+
+  rows.push(
+    <text key="manip" x={x0} y={baseline(y, L.fontSizeInfo)} fontSize={L.fontSizeInfo} fontFamily="monospace" fill="#333">
+      {`Manip.: ${f.dataManip || '__/__/____'}`}
+    </text>
+  );
+  y += L.fontSizeInfo + L.lineGap;
+
+  rows.push(<line key="sep2" x1={x0} y1={y} x2={x0 + contentWidth} y2={y} stroke="#000" strokeWidth={1} />);
+  y += L.lineGap;
+
+  rows.push(
+    <text key="validade" x={x0} y={baseline(y, L.fontSizeValidade)}
+      fontSize={L.fontSizeValidade} fontWeight="bold" fontFamily="monospace" fill="#000">
+      {`VALIDADE: ${f.dataValidade || '__/__/____'}`}
+    </text>
+  );
+  y += L.fontSizeValidade + L.lineGap;
+
+  rows.push(<line key="sep3" x1={x0} y1={y} x2={x0 + contentWidth} y2={y} stroke="#000" strokeWidth={1} />);
+  y += L.lineGap;
+
+  rows.push(
+    <text key="resp" x={x0} y={baseline(y, L.fontSizeResponsavel)} fontSize={L.fontSizeResponsavel} fontFamily="monospace" fill="#555">
+      {`Resp.: ${abbr(f.responsavel || '—', 30)}`}
+    </text>
+  );
+  y += L.fontSizeResponsavel;
+
+  const overflow = y > (H - L.marginBottom) || x0 < 0 || (x0 + contentWidth) > W;
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
@@ -42,52 +122,196 @@ function EtiquetaPreview({ f }: { f: FormState }) {
         viewBox={`0 0 ${W} ${H}`}
         style={{ border:'1px solid #ccc', borderRadius:4, background:'#fff', display:'block' }}
       >
-        {/* Borda */}
-        <rect x="2" y="2" width="476" height="236" fill="none" stroke="#000" strokeWidth="2" />
-
-        {/* Produto */}
-        <text x="10" y="26" fontSize="20" fontWeight="bold" fontFamily="monospace" fill="#000">
-          {abbr(f.produto || 'PRODUTO', 28)}
-        </text>
-
-        {/* Separador */}
-        <line x1="10" y1="33" x2="470" y2="33" stroke="#000" strokeWidth="1" />
-
-        {/* Fab + SIF */}
-        <text x="10" y="48" fontSize="13" fontFamily="monospace" fill="#333">
-          {`Fab: ${abbr(f.fabricante || 'Fabricante', 18)}`}
-        </text>
-        <text x="295" y="48" fontSize="13" fontFamily="monospace" fill="#333">
-          {`SIF: ${abbr(f.sif || '—', 8)}`}
-        </text>
-
-        {/* Lote */}
-        <text x="10" y="64" fontSize="13" fontFamily="monospace" fill="#333">
-          {`Lote: ${abbr(f.lote || '—', 22)}`}
-        </text>
-
-        {/* Manipulação */}
-        <text x="10" y="80" fontSize="13" fontFamily="monospace" fill="#333">
-          {`Manip.: ${f.dataManip || '__/__/____'}`}
-        </text>
-
-        {/* Separador */}
-        <line x1="10" y1="87" x2="470" y2="87" stroke="#000" strokeWidth="1" />
-
-        {/* Validade — destaque */}
-        <text x="10" y="115" fontSize="26" fontWeight="bold" fontFamily="monospace" fill="#000">
-          {`VALIDADE: ${f.dataValidade || '__/__/____'}`}
-        </text>
-
-        {/* Separador */}
-        <line x1="10" y1="124" x2="470" y2="124" stroke="#000" strokeWidth="1" />
-
-        {/* Responsável */}
-        <text x="10" y="138" fontSize="12" fontFamily="monospace" fill="#555">
-          {`Resp.: ${abbr(f.responsavel || '—', 30)}`}
-        </text>
+        <rect x={2 + L.offsetX} y={2 + L.offsetY} width="476" height="236" fill="none" stroke="#000" strokeWidth="2" />
+        {rows}
+        {overflow && (
+          <rect x="1" y="1" width={W - 2} height={H - 2} fill="none" stroke={BRAND.red} strokeWidth="4" strokeDasharray="6,4" />
+        )}
       </svg>
-      <div style={{ fontSize:11, color:'#aaa' }}>Preview em tempo real (não é escala exata)</div>
+      {overflow ? (
+        <div style={{ fontSize:12, color:BRAND.red, fontWeight:700, textAlign:'center' }}>
+          ⚠️ Conteúdo ultrapassa a área da etiqueta — reduza fontes, margens ou offset
+        </div>
+      ) : (
+        <div style={{ fontSize:11, color:'#aaa' }}>Preview em tempo real (não é escala exata)</div>
+      )}
+    </div>
+  );
+}
+
+// ── Modal de configuração de layout (posição, margens, tamanhos de fonte) ─────
+const LAYOUT_FIELD_GROUPS: Array<{
+  title: string;
+  fields: Array<{ key: keyof EtiquetaLayoutConfig; label: string; min: number; max: number }>;
+}> = [
+  {
+    title: 'Posição global (compensa desalinhamento da impressora)',
+    fields: [
+      { key:'offsetX', label:'Offset horizontal (X)', min:-60, max:60 },
+      { key:'offsetY', label:'Offset vertical (Y)',   min:-60, max:60 },
+    ],
+  },
+  {
+    title: 'Margens do conteúdo',
+    fields: [
+      { key:'marginLeft',   label:'Esquerda',  min:0, max:100 },
+      { key:'marginRight',  label:'Direita',   min:0, max:100 },
+      { key:'marginTop',    label:'Superior',  min:0, max:100 },
+      { key:'marginBottom', label:'Inferior',  min:0, max:100 },
+    ],
+  },
+  {
+    title: 'Tamanho das fontes',
+    fields: [
+      { key:'fontSizeProduto',     label:'Produto',                  min:8, max:60 },
+      { key:'fontSizeInfo',        label:'Fab / SIF / Lote / Manip.', min:8, max:40 },
+      { key:'fontSizeValidade',    label:'Validade',                 min:8, max:60 },
+      { key:'fontSizeResponsavel', label:'Responsável',              min:8, max:40 },
+    ],
+  },
+  {
+    title: 'Espaçamento',
+    fields: [
+      { key:'lineGap', label:'Entre linhas', min:0, max:40 },
+    ],
+  },
+];
+
+function LayoutConfigModal({
+  layout, formData, isFormValid, onClose, onSaved,
+}: {
+  layout: EtiquetaLayoutConfig;
+  formData: EtiquetaValidadeInput;
+  isFormValid: boolean;
+  onClose: () => void;
+  onSaved: (l: EtiquetaLayoutConfig) => void;
+}) {
+  const [draft, setDraft]   = useState<EtiquetaLayoutConfig>(layout);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [err, setErr]       = useState<string | null>(null);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+
+  function setField(key: keyof EtiquetaLayoutConfig, val: number) {
+    setDraft(d => ({ ...d, [key]: val }));
+    setTestMsg(null);
+  }
+
+  async function handleSave() {
+    setSaving(true); setErr(null);
+    try {
+      const saved = await etiquetasApi.saveLayout(draft);
+      onSaved(saved);
+      onClose();
+    } catch (e: any) {
+      setErr(e.message ?? 'Erro ao salvar layout.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleReset() {
+    setSaving(true); setErr(null);
+    try {
+      const reset = await etiquetasApi.resetLayout();
+      setDraft(reset);
+    } catch (e: any) {
+      setErr(e.message ?? 'Erro ao restaurar layout padrão.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true); setErr(null); setTestMsg(null);
+    try {
+      const r = await etiquetasApi.testLayout(formData, draft);
+      if (r.ok) setTestMsg('✅ Etiqueta de teste enviada para a impressora.');
+      else setErr(r.error ?? 'Falha ao imprimir teste.');
+    } catch (e: any) {
+      setErr(e.message ?? 'Erro ao imprimir teste.');
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  const numInputStyle: React.CSSProperties = {
+    width:'100%', boxSizing:'border-box', padding:'7px 10px', borderRadius:6,
+    border:'1.5px solid #d0d5dd', fontSize:13, fontFamily:'inherit', outline:'none',
+  };
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, background:'rgba(0,0,0,.45)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20,
+    }}>
+      <div style={{
+        background:'#fff', borderRadius:16, padding:'28px 32px', maxWidth:520, width:'100%',
+        maxHeight:'88vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,.18)',
+      }}>
+        <h2 style={{ margin:'0 0 4px', fontSize:19, fontWeight:900, color:BRAND.navy }}>
+          Configurar layout da etiqueta
+        </h2>
+        <p style={{ margin:'0 0 20px', color:'#888', fontSize:13 }}>
+          Valores em dots (203 dpi — 8 dots/mm). Etiqueta BOPP 60×30 mm (480×240 dots).
+        </p>
+
+        {LAYOUT_FIELD_GROUPS.map(group => (
+          <div key={group.title} style={{ marginBottom:18 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:'#666', marginBottom:8 }}>{group.title}</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              {group.fields.map(f => (
+                <div key={f.key}>
+                  <label style={{ display:'block', fontSize:11, color:'#999', marginBottom:3 }}>
+                    {f.label} <span style={{ color:'#ccc' }}>({f.min} a {f.max})</span>
+                  </label>
+                  <input
+                    style={numInputStyle}
+                    type="number" min={f.min} max={f.max}
+                    value={draft[f.key]}
+                    onChange={e => {
+                      const v = Math.min(f.max, Math.max(f.min, parseInt(e.target.value) || 0));
+                      setField(f.key, v);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {err && (
+          <div style={{ marginBottom:14, padding:'10px 12px', borderRadius:8, background:'#fff0f0',
+            border:'1px solid #fcc', fontSize:13, color:BRAND.red, fontWeight:600 }}>{err}</div>
+        )}
+        {testMsg && (
+          <div style={{ marginBottom:14, padding:'10px 12px', borderRadius:8, background:'#eafaf1',
+            border:'1px solid #b7ebcd', fontSize:13, color:'#1a7a3e', fontWeight:600 }}>{testMsg}</div>
+        )}
+
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'space-between', marginTop:8 }}>
+          <div style={{ display:'flex', gap:10 }}>
+            <Btn variant="ghost" onClick={onClose} disabled={saving || testing}>Cancelar</Btn>
+            <Btn variant="ghost" onClick={handleReset} disabled={saving || testing}>Restaurar padrão</Btn>
+          </div>
+          <div style={{ display:'flex', gap:10 }}>
+            <Btn
+              variant="secondary" onClick={handleTest}
+              disabled={saving || testing || !isFormValid}
+            >
+              {testing ? 'Imprimindo…' : '🖨️ Imprimir teste'}
+            </Btn>
+            <Btn variant="primary" onClick={handleSave} disabled={saving || testing}>
+              {saving ? 'Salvando…' : 'Salvar layout'}
+            </Btn>
+          </div>
+        </div>
+        {!isFormValid && (
+          <p style={{ margin:'10px 0 0', fontSize:11, color:'#aaa' }}>
+            Preencha o formulário à esquerda para habilitar a impressão de teste.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -132,6 +356,8 @@ export default function GerarEtiquetas() {
   const [loading, setLoading]     = useState(false);
   const [success, setSuccess]     = useState<string | null>(null);
   const [error, setError]         = useState<string | null>(null);
+  const [layout, setLayout]       = useState<EtiquetaLayoutConfig>(DEFAULT_LAYOUT);
+  const [showLayout, setShowLayout] = useState(false);
   const successTimer              = useRef<ReturnType<typeof setTimeout>>();
 
   // Verifica status da impressora ao montar
@@ -139,6 +365,13 @@ export default function GerarEtiquetas() {
     etiquetasApi.status()
       .then((r: any) => setOnline(r.online))
       .catch(() => setOnline(false));
+  }, []);
+
+  // Carrega o layout de impressão salvo (posicionamento, margens, fontes)
+  useEffect(() => {
+    etiquetasApi.getLayout()
+      .then((l) => setLayout(l))
+      .catch(() => setLayout(DEFAULT_LAYOUT));
   }, []);
 
   function set(key: keyof FormState, val: string | number) {
@@ -210,13 +443,18 @@ export default function GerarEtiquetas() {
         title="Gerar Etiquetas de Validade"
         subtitle="Impressora Elgin L42 Pro Full — etiqueta BOPP 60×30 mm"
         action={
-          <div style={{
-            display:'flex', alignItems:'center', gap:8,
-            fontSize:13, fontWeight:600,
-            color: online === null ? '#aaa' : online ? BRAND.green : BRAND.red,
-          }}>
-            <span style={{ fontSize:10 }}>●</span>
-            {online === null ? 'Verificando…' : online ? 'Impressora online' : 'Impressora offline'}
+          <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+            <div style={{
+              display:'flex', alignItems:'center', gap:8,
+              fontSize:13, fontWeight:600,
+              color: online === null ? '#aaa' : online ? BRAND.green : BRAND.red,
+            }}>
+              <span style={{ fontSize:10 }}>●</span>
+              {online === null ? 'Verificando…' : online ? 'Impressora online' : 'Impressora offline'}
+            </div>
+            <Btn variant="ghost" small onClick={() => setShowLayout(true)}>
+              ⚙️ Configurar etiqueta
+            </Btn>
           </div>
         }
       />
@@ -324,11 +562,14 @@ export default function GerarEtiquetas() {
 
         {/* ── Preview ── */}
         <Card style={{ display:'flex', flexDirection:'column', gap:16, alignItems:'center' }}>
-          <EtiquetaPreview f={{
-            ...form,
-            dataManip:    formatDate(form.dataManip),
-            dataValidade: formatDate(form.dataValidade),
-          }} />
+          <EtiquetaPreview
+            f={{
+              ...form,
+              dataManip:    formatDate(form.dataManip),
+              dataValidade: formatDate(form.dataValidade),
+            }}
+            layout={layout}
+          />
 
           <div style={{
             width:'100%', padding:'12px 16px', borderRadius:8,
@@ -348,6 +589,20 @@ export default function GerarEtiquetas() {
           onConfirm={handlePrint}
           onCancel={() => setConfirm(false)}
           loading={loading}
+        />
+      )}
+
+      {showLayout && (
+        <LayoutConfigModal
+          layout={layout}
+          formData={{
+            ...form,
+            dataManip:    formatDate(form.dataManip),
+            dataValidade: formatDate(form.dataValidade),
+          }}
+          isFormValid={validate() === null}
+          onClose={() => setShowLayout(false)}
+          onSaved={setLayout}
         />
       )}
     </div>

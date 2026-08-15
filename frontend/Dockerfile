@@ -22,6 +22,13 @@ RUN npm ci
 
 COPY . .
 
+# Vite embute essas variáveis no bundle estático em build-time — não é possível
+# configurá-las via `environment:` do container em runtime (target production).
+ARG VITE_API_URL
+ARG VITE_WS_URL
+ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_WS_URL=${VITE_WS_URL}
+
 RUN npm run build
 
 # ─── Production (nginx serves static files) ──────────────────────────────────

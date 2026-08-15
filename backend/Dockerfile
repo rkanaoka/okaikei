@@ -27,5 +27,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# schema.prisma + migrations/ — necessários em runtime para `prisma migrate deploy`
+# (ver docker-compose.prod.yml, comando do serviço backend)
+COPY --from=builder /app/prisma ./prisma
 EXPOSE 3001
 CMD ["node", "dist/main"]

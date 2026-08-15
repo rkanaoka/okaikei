@@ -143,12 +143,27 @@ export const printTemplatesApi = {
 };
 
 // ── Etiquetas de Validade (Controle de Estoque) ───────────────────────────────
+export type EtiquetaValidadeInput = {
+  produto: string; fabricante: string; lote: string; sif: string;
+  dataManip: string; dataValidade: string; responsavel: string; quantidade: number;
+};
+
+export type EtiquetaLayoutConfig = {
+  offsetX: number; offsetY: number;
+  marginLeft: number; marginRight: number; marginTop: number; marginBottom: number;
+  fontSizeProduto: number; fontSizeInfo: number; fontSizeValidade: number; fontSizeResponsavel: number;
+  lineGap: number;
+};
+
 export const etiquetasApi = {
   status: () => http.get('/estoque/etiquetas/status'),
-  print:  (d: {
-    produto: string; fabricante: string; lote: string; sif: string;
-    dataManip: string; dataValidade: string; responsavel: string; quantidade: number;
-  }) => http.post('/estoque/etiquetas/print', d),
+  print:  (d: EtiquetaValidadeInput) => http.post('/estoque/etiquetas/print', d),
+
+  getLayout:   () => http.get('/estoque/etiquetas/layout') as Promise<EtiquetaLayoutConfig>,
+  saveLayout:  (d: Partial<EtiquetaLayoutConfig>) => http.put('/estoque/etiquetas/layout', d) as Promise<EtiquetaLayoutConfig>,
+  resetLayout: () => http.post('/estoque/etiquetas/layout/reset', {}) as Promise<EtiquetaLayoutConfig>,
+  testLayout:  (etiqueta: EtiquetaValidadeInput, layout?: Partial<EtiquetaLayoutConfig>) =>
+    http.post('/estoque/etiquetas/layout/test', { etiqueta, layout }) as Promise<{ ok: boolean; error?: string }>,
 };
 
 // ── Sync ──────────────────────────────────────────────────────────────────────
