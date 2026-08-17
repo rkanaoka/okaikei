@@ -6,11 +6,18 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
+export const AUTH_TOKEN_KEY = 'bodogami_admin_token';
 
 const http: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 10_000,
   headers: { 'Content-Type': 'application/json' },
+});
+
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
 });
 
 http.interceptors.response.use(
@@ -20,6 +27,21 @@ http.interceptors.response.use(
     return Promise.reject(new Error(msg));
   },
 );
+
+// ── Autenticação / Usuários (Admin) ────────────────────────────────────────────
+export type AuthUser = { id: string; name: string; email: string; role: string; permissions: string[] };
+export type LoginResult = { pending: true } | { token: string; user: AuthUser };
+
+export const authApi = {
+  login:         (username: string, password: string) => http.post('/auth/login', { username, password }) as Promise<LoginResult>,
+  loginFirebase: (idToken: string) => http.post('/auth/firebase', { idToken }) as Promise<LoginResult>,
+  me:            () => http.get('/auth/me') as Promise<AuthUser>,
+};
+
+export const usersApi = {
+  list:   () => http.get('/users') as Promise<Array<AuthUser & { active: boolean; adminPermissions: string[] }>>,
+  update: (id: string, d: { active?: boolean; adminPermissions?: string[] }) => http.patch(`/users/${id}`, d),
+};
 
 // ── Menu ─────────────────────────────────────────────────────────────────────
 export const menuApi = {

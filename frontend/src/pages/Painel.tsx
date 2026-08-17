@@ -124,7 +124,7 @@ export default function Painel() {
     finally { setLoading(false); }
   }, [filter]);
 
-  useEffect(() => { load(); const t = setInterval(load, 20000); return () => clearInterval(t); }, [load]);
+  useEffect(() => { load(); const t = setInterval(load, 1800000); return () => clearInterval(t); }, [load]);
 
   useEffect(() => {
     syncApi.status().then(setSyncStatus).catch(()=>{});
@@ -199,7 +199,7 @@ export default function Painel() {
         ))}
       </div>
 
-      {lastUpdate && <div className="last-update">Atualizado às {lastUpdate.toLocaleTimeString('pt-BR')} · Auto-refresh 20s</div>}
+      {lastUpdate && <div className="last-update">Atualizado às {lastUpdate.toLocaleTimeString('pt-BR')} · Auto-refresh 10min</div>}
 
       <div className="main">
         {loading ? (

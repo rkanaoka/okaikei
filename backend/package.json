@@ -22,6 +22,7 @@
     "@nestjs/platform-socket.io": "^10.3.0",
     "@nestjs/config":       "^3.2.0",
     "@nestjs/schedule":     "^4.0.0",
+    "@nestjs/jwt":          "^10.2.0",
     "@prisma/client":       "^5.11.0",
     "prisma":               "^5.11.0",
     "nats":                 "^2.27.0",
@@ -32,12 +33,15 @@
     "reflect-metadata":     "^0.2.2",
     "rxjs":                 "^7.8.1",
     "axios":                "^1.6.7",
-    "socket.io":            "^4.7.4"
+    "socket.io":            "^4.7.4",
+    "bcryptjs":             "^2.4.3",
+    "firebase-admin":       "^12.1.0"
   },
   "devDependencies": {
     "@nestjs/cli":          "^10.3.2",
     "@nestjs/schematics":   "^10.1.1",
     "@types/node":          "^20.11.0",
+    "@types/bcryptjs":      "^2.4.6",
     "ts-node":              "^10.9.2",
     "typescript":           "^5.4.3"
   }

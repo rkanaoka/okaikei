@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BRAND, EmptyPlaceholder } from './admin/shared';
+import { AuthProvider, useAuth } from '@/store/AuthContext';
 
+import Login                from './admin/Login';
+import Usuarios             from './admin/Usuarios';
 import Dashboard            from './admin/Dashboard';
 import Cardapio              from './admin/Cardapio';
 import Categorias           from './admin/Categorias';
@@ -27,43 +30,45 @@ type SectionId =
   | 'rel-itens'      | 'rel-faturamento' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
   | 'estoque-etiquetas'
   | 'config-loja'    | 'config-horarios' | 'config-fiscal'
-  | 'config-cancelamento' | 'config-desconto' | 'config-impressao';
+  | 'config-cancelamento' | 'config-desconto' | 'config-impressao' | 'config-usuarios';
 
+// Chave de permissão de cada entrada de topo — ver frontend/src/pages/admin/permissions.ts
 const NAV: Array<
-  | { type:'link';  id:SectionId; label:string; icon:string }
-  | { type:'group'; label:string; icon:string; items:{ id:SectionId; label:string }[] }
+  | { type:'link';  id:SectionId; label:string; icon:string; permission:string }
+  | { type:'group'; label:string; icon:string; permission:string; items:{ id:SectionId; label:string }[] }
 > = [
-  { type:'link',  id:'dashboard', label:'Dashboard', icon:'📊' },
-  { type:'group', label:'Cardápio', icon:'🍽️', items:[
+  { type:'link',  id:'dashboard', label:'Dashboard', icon:'📊', permission:'dashboard' },
+  { type:'group', label:'Cardápio', icon:'🍽️', permission:'cardapio', items:[
     { id:'cardapio',            label:'Itens do Cardápio' },
     { id:'cardapio-categorias', label:'Categorias' },
   ]},
-  { type:'group', label:'Financeiro', icon:'💰', items:[
+  { type:'group', label:'Financeiro', icon:'💰', permission:'financeiro', items:[
     { id:'fin-pagamentos',    label:'Formas de pagamento' },
     { id:'fin-gorjetas',      label:'Acerto de garçons' },
     { id:'fin-frentes-caixa', label:'Frentes de Caixa' },
   ]},
-  { type:'group', label:'Relacionamentos', icon:'👥', items:[
+  { type:'group', label:'Relacionamentos', icon:'👥', permission:'relacionamentos', items:[
     { id:'rel-clientes', label:'Cadastro de clientes' },
     { id:'rel-cupons',   label:'Vouchers' },
   ]},
-  { type:'group', label:'Relatórios', icon:'📈', items:[
+  { type:'group', label:'Relatórios', icon:'📈', permission:'relatorios', items:[
     { id:'rel-itens',              label:'Itens vendidos' },
     { id:'rel-faturamento',        label:'Faturamento por dia' },
     { id:'rel-tempo',              label:'Tempo por status' },
     { id:'rel-faturamento-notion', label:'Importar Faturamento (Notion)' },
     { id:'rel-extrato-notion',     label:'Importar Extrato Bancário (Notion)' },
   ]},
-  { type:'group', label:'Estoque', icon:'📦', items:[
+  { type:'group', label:'Estoque', icon:'📦', permission:'estoque', items:[
     { id:'estoque-etiquetas', label:'Gerar Etiquetas de Validade' },
   ]},
-  { type:'group', label:'Configurações', icon:'⚙️', items:[
+  { type:'group', label:'Configurações', icon:'⚙️', permission:'configuracoes', items:[
     { id:'config-loja',          label:'Dados da loja' },
     { id:'config-horarios',      label:'Horários de funcionamento' },
     { id:'config-fiscal',        label:'Dados fiscais' },
     { id:'config-cancelamento',  label:'Motivos de cancelamento' },
     { id:'config-desconto',      label:'Motivos de desconto' },
     { id:'config-impressao',     label:'Modelos de impressão' },
+    { id:'config-usuarios',      label:'Usuários' },
   ]},
 ];
 
@@ -120,13 +125,37 @@ function renderSection(id: SectionId) {
     case 'config-cancelamento': return <MotivosCancelamento />;
     case 'config-desconto':     return <MotivosDesconto />;
     case 'config-impressao':    return <ModelosImpressao />;
+    case 'config-usuarios':     return <Usuarios />;
     default:                    return <Dashboard />;
   }
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Admin() {
-  const [section, setSection]     = useState<SectionId>('dashboard');
+  return (
+    <AuthProvider>
+      <AdminGate />
+    </AuthProvider>
+  );
+}
+
+function AdminGate() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user)   return <Login />;
+  return <AdminShell />;
+}
+
+function firstSection(nav: typeof NAV): SectionId {
+  const first = nav[0];
+  if (!first) return 'dashboard';
+  return first.type === 'link' ? first.id : first.items[0].id;
+}
+
+function AdminShell() {
+  const { user, logout } = useAuth();
+  const nav = NAV.filter(item => user!.role === 'ADMIN' || user!.permissions.includes(item.permission));
+  const [section, setSection]     = useState<SectionId>(() => firstSection(nav));
   const [openGroups, setOpenGroups] = useState<Record<string,boolean>>({
     'Cardápio': false, 'Financeiro': false, 'Relacionamentos': false,
     'Relatórios': false, 'Estoque': false, 'Configurações': false,
@@ -154,7 +183,7 @@ export default function Admin() {
         </div>
 
         <nav style={{ flex:1, padding:'8px 0' }}>
-          {NAV.map((item, idx) => {
+          {nav.map((item, idx) => {
             if (item.type === 'link') {
               const active = section === item.id;
               return (
@@ -215,9 +244,19 @@ export default function Admin() {
         </nav>
 
         <div style={{ padding:'14px 20px', borderTop:'1px solid rgba(255,255,255,.1)' }}>
-          <Link to="/" style={{ color:'rgba(255,255,255,.45)', fontSize:12, textDecoration:'none', fontWeight:600 }}>
-            ← Voltar ao Painel
-          </Link>
+          <div style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,.75)' }}>{user!.name}</div>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,.4)', marginBottom:10 }}>{user!.email}</div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <Link to="/" style={{ color:'rgba(255,255,255,.45)', fontSize:12, textDecoration:'none', fontWeight:600 }}>
+              ← Voltar ao Painel
+            </Link>
+            <button onClick={logout} style={{
+              background:'transparent', border:'none', color:'rgba(255,255,255,.45)',
+              fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit', padding:0,
+            }}>
+              Sair
+            </button>
+          </div>
         </div>
       </aside>
 

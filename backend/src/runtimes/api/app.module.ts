@@ -12,6 +12,7 @@ import { SyncModule }            from '@/modules/sync/sync.module';
 import { ConfigsModule }         from '@/modules/config/config.module';
 import { ControleEstoqueModule } from '@/modules/controle-estoque/controle-estoque.module';
 import { CardapioDigitalModule } from '@/modules/cardapio-digital/cardapio-digital.module';
+import { AuthModule }            from '@/modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CardapioDigitalModule } from '@/modules/cardapio-digital/cardapio-digit
     GatewayModule,
 
     // Features
+    AuthModule,
     PontoDeVendaModule,
     SyncModule,
     ConfigsModule,
