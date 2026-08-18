@@ -2,9 +2,17 @@
  * Gerar Etiquetas de Validade
  * Impressora: Elgin L42 Pro Full — etiqueta BOPP branco 60×30 mm (ZPL II)
  */
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, type ReactNode } from 'react';
 import { BRAND, Card, PageHeader, Btn } from './shared';
 import { etiquetasApi, EtiquetaLayoutConfig, EtiquetaValidadeInput } from '../../services/api';
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elemName: string]: any;
+    }
+  }
+}
 
 // ── tipos ──────────────────────────────────────────────────────────────────────
 interface FormState {

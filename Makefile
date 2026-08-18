@@ -9,14 +9,16 @@
         shell-db shell-backend shell-frontend \
         lint format test
 
-COMPOSE  = docker compose
+# -p isola este stack do docker-compose.prod.yml (ver Makefile.prod), que roda
+# em paralelo no mesmo host sob o projeto "bodogami-prod".
+COMPOSE  = docker compose -p bodogami-dev
 BACKEND  = $(COMPOSE) exec backend
 DB_SVC   = $(COMPOSE) exec postgres
 
 # Valores do banco — devem bater com .env.development
 DB_USER = bodogami
 DB_NAME = bodogami_local
-DB_PASS = bodogami_secret
+DB_PASS = bodogami_prod_secret
 
 ## ── Help ─────────────────────────────────────────────────────────────────────
 help:
@@ -50,7 +52,8 @@ help:
 ## ── Docker ───────────────────────────────────────────────────────────────────
 up:
 	$(COMPOSE) up -d
-	@echo "✓  Serviços no ar. Frontend: http://localhost"
+	@echo "✓  Serviços no ar. Frontend (dev): http://localhost:8080"
+	@echo "   (produção, se estiver no ar, continua em http://localhost)"
 
 down:
 	$(COMPOSE) down

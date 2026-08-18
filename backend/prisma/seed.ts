@@ -1,12 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
-import { createHash } from 'crypto';
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// Dev-only: SHA-256 hash simples (substitua por bcrypt em produção)
 function hashPwd(pwd: string) {
-  return createHash('sha256').update(pwd).digest('hex');
+  return bcrypt.hashSync(pwd, 10);
 }
 
 async function main() {
@@ -165,7 +164,6 @@ async function main() {
   console.log('\n✅  Seed complete!');
   console.log('   Admin: admin@bodogami.com.br / admin123');
   console.log('   Garçom: garcom@bodogami.com.br / garcom123');
-  console.log('   (Senhas com SHA-256 simples — use bcrypt em produção)');
 }
 
 main()

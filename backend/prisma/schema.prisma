@@ -13,14 +13,16 @@ datasource db {
 
 // ─── Usuários / Operadores ────────────────────────────────────────────────────
 model User {
-  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  name      String   @db.VarChar(100)
-  email     String   @unique @db.VarChar(200)
-  password  String
-  role      UserRole @default(WAITER)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name             String   @db.VarChar(100)
+  email            String   @unique @db.VarChar(200)
+  password         String
+  role             UserRole @default(WAITER)
+  active           Boolean  @default(true)
+  firebaseUid      String?  @unique @map("firebase_uid")
+  adminPermissions String[] @default([]) @map("admin_permissions")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   comandas Comanda[]
 
