@@ -91,10 +91,16 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      # Dentro do Docker o host é o nome do serviço, não localhost — sobrescreve .env
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # DATABASE_URL vem direto do .env — banco externo (10.5.103.73), migrado do
+      # Postgres interno em 2026-09-02. Dentro do Docker o host do Redis/NATS ainda
+      # é o nome do serviço, não localhost — por isso esses dois seguem sobrescritos.
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       NATS_URL: nats://${NATS_TOKEN}@nats:4222
+    # Publicado só no loopback — o WireGuard roda na WSL, que o WSL2 encaminha de forma
+    # confiável para 127.0.0.1 do Windows (diferente do acesso "por baixo do capô" às
+    # portas internas do Docker Desktop, que não é garantido). Não expõe pra LAN/internet.
+    ports:
+      - "127.0.0.1:3001:3001"
     networks:
       - bodogami_prod
     depends_on:

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Relatório de Incidente — Cardápio Digital Indisponível</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', -apple-system, Arial, sans-serif;
+    color: #1a1a1a;
+    line-height: 1.55;
+    font-size: 13px;
+    max-width: 100%;
+    margin: 0;
+  }
+  h1 { font-size: 22px; color: #0D1B2A; margin: 0 0 4px; }
+  h2 {
+    font-size: 15px; color: #0D1B2A; margin: 26px 0 10px;
+    padding-bottom: 6px; border-bottom: 2px solid #FF6B2B;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 13px; color: #0D1B2A; margin: 16px 0 6px; page-break-after: avoid; }
+  .subtitle { color: #666; font-size: 12px; margin-bottom: 18px; }
+  .meta-box {
+    background: #f4f6f8; border: 1px solid #e0e4e8; border-radius: 6px;
+    padding: 12px 16px; margin-bottom: 20px; font-size: 12px;
+  }
+  .meta-box div { margin: 2px 0; }
+  .meta-box b { color: #0D1B2A; display: inline-block; min-width: 130px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 12px; }
+  th, td { border: 1px solid #dde2e6; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #0D1B2A; color: #fff; font-weight: 600; }
+  tr:nth-child(even) { background: #f8f9fa; }
+  .cause {
+    border: 1px solid #e0e4e8; border-left: 4px solid #FF6B2B; border-radius: 4px;
+    padding: 10px 14px; margin: 10px 0; page-break-inside: avoid;
+  }
+  .cause .num {
+    display: inline-block; background: #0D1B2A; color: #fff; border-radius: 50%;
+    width: 20px; height: 20px; text-align: center; line-height: 20px;
+    font-size: 11px; font-weight: 700; margin-right: 8px;
+  }
+  .cause-title { font-weight: 700; color: #0D1B2A; font-size: 13px; }
+  code, .mono {
+    font-family: 'Consolas', 'Courier New', monospace; font-size: 11.5px;
+    background: #f0f2f5; padding: 1px 5px; border-radius: 3px; color: #C0392B;
+  }
+  pre {
+    background: #0D1B2A; color: #e8eaed; padding: 10px 14px; border-radius: 6px;
+    font-family: 'Consolas', 'Courier New', monospace; font-size: 11px;
+    overflow-x: auto; page-break-inside: avoid; line-height: 1.5;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+  .status-ok { color: #2DC653; font-weight: 700; }
+  .status-fixed { display: inline-block; background: #2DC65322; color: #218838; font-weight: 700;
+    font-size: 11px; padding: 2px 10px; border-radius: 999px; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  .footer-note {
+    margin-top: 30px; padding-top: 12px; border-top: 1px solid #e0e4e8;
+    font-size: 10.5px; color: #999;
+  }
+  .files-list { font-size: 12px; }
+  .files-list code { display: inline-block; margin: 2px 0; }
+</style>
+</head>
+<body>
+
+<h1>Relatório de Incidente</h1>
+<div class="subtitle">Cardápio Digital indisponível — cardapio.bodogami.tech</div>
+
+<div class="meta-box">
+  <div><b>Data do incidente</b> 01–02/09/2026</div>
+  <div><b>Sistema afetado</b> Cardápio Digital (VPS) — <span class="mono">cardapio.bodogami.tech</span></div>
+  <div><b>Sintoma reportado</b> "Não foi possível carregar o cardápio. Verifique sua conexão."</div>
+  <div><b>Status final</b> <span class="status-ok">Resolvido</span> — cardápio carregando normalmente</div>
+  <div><b>Commit da correção</b> <span class="mono">20700e5</span> — branch <span class="mono">firebase</span></div>
+</div>
+
+<h2>Resumo Executivo</h2>
+<p>
+O cardápio digital público, hospedado na VPS e acessado pelos clientes do restaurante, parou de carregar,
+exibindo uma mensagem genérica de erro de conexão. A investigação revelou <b>seis problemas independentes
+e empilhados</b> na cadeia de comunicação entre a VPS e o backend local do restaurante (via túnel WireGuard),
+acumulados ao longo de semanas sem terem sido detectados — o sistema nunca havia sido testado de ponta a
+ponta desde que essa integração foi implantada.
+</p>
+<p>
+Nenhum dado de clientes ou do restaurante foi perdido. Uma migração de banco de dados que estava pendente
+(planejada, mas nunca finalizada) foi identificada e concluída durante a correção, incluindo validação de
+integridade dos dados migrados.
+</p>
+
+<h2>Causas Raiz (na ordem em que foram descobertas)</h2>
+
+<div class="cause">
+  <div class="cause-title"><span class="num">1</span>URL do backend local apontando para porta errada</div>
+  <p><span class="mono">LOCAL_BACKEND_URL</span> no <span class="mono">.env.vps</span> da VPS apontava para a porta
+  <span class="mono">3000</span>; o backend real escuta na <span class="mono">3001</span>.</p>
+  <p><b>Correção:</b> valor ajustado para <span class="mono">http://10.0.0.2:3001</span>.</p>
+</div>
+
+<div class="cause">
+  <div class="cause-title"><span class="num">2</span>Porta do backend não publicada no host de produção</div>
+  <p>O serviço <span class="mono">backend</span> no <span class="mono">docker-compose.prod.yml</span> não expunha
+  nenhuma porta ao host Windows — só era acessível pela rede interna do Docker, tornando-o inalcançável
+  pelo túnel WireGuard.</p>
+  <p><b>Correção:</b> publicada em <span class="mono">127.0.0.1:3001</span> (loopback apenas, sem expor à LAN/internet).</p>
+</div>
+
+<div class="cause">
+  <div class="cause-title"><span class="num">3</span>Migração de banco de dados pendente e nunca finalizada</div>
+  <p>Ao recriar o container do backend para aplicar a correção #2, o processo entrou em <b>crash-loop</b>:
+  o <span class="mono">.env</span> de produção já apontava para um Postgres externo
+  (<span class="mono">10.5.103.73</span>), mas os dados reais (cardápio, usuários, comandas) ainda estavam
+  apenas no Postgres interno (container <span class="mono">bodogami_prod_postgres</span>, no ar desde 18/08).
+  O backend anterior só funcionava porque nunca havia sido recriado desde a mudança do <span class="mono">.env</span>.</p>
+  <p><b>Correção:</b> dump completo do Postgres interno (<span class="mono">pg_dump</span>), restauração no
+  externo (<span class="mono">pg_restore</span>), e conferência de integridade por contagem de linhas em
+  todas as tabelas principais — 100% de correspondência. Backend reapontado para o banco externo.</p>
+</div>
+
+<div class="cause">
+  <div class="cause-title"><span class="num">4</span>Porta em loopback não alcançável pelo túnel WireGuard</div>
+  <p>O WireGuard roda dentro de uma distro WSL Ubuntu, numa interface de rede própria
+  (<span class="mono">10.0.0.2</span>) — distinta do mecanismo de "localhost forwarding" do WSL2 que só
+  cobre <span class="mono">127.0.0.1</span>. Tráfego chegando em <span class="mono">10.0.0.2:3001</span>
+  não tinha para onde ir.</p>
+  <p><b>Correção:</b> encaminhamento com <span class="mono">socat</span>, vinculado especificamente à
+  interface do WireGuard, redirecionando para <span class="mono">127.0.0.1:3001</span>. Uma tentativa
+  inicial com <span class="mono">iptables REDIRECT</span> não funcionou de forma confiável (problema de
+  conntrack/roteamento assimétrico com a interface de túnel). Serviço tornado persistente via
+  <span class="mono">systemd</span> (<span class="mono">cardapio-vpn-forward.service</span>), sobrevivendo
+  a reinicializações da WSL.</p>
+</div>
+
+<div class="cause">
+  <div class="cause-title"><span class="num">5</span>Healthcheck do vps-api sempre falhando (bug de IPv6)</div>
+  <p>O healthcheck usava <span class="mono">http://localhost:4000/health</span>. Em imagens Alpine (musl libc),
+  <span class="mono">localhost</span> pode resolver para <span class="mono">::1</span> (IPv6), endereço que o
+  Node não escuta — o container ficava permanentemente marcado <span class="mono">unhealthy</span>, mesmo
+  com o servidor respondendo normalmente.</p>
+  <p><b>Correção:</b> healthcheck alterado para <span class="mono">http://127.0.0.1:4000/health</span>
+  em todos os arquivos que o definem.</p>
+</div>
+
+<div class="cause">
+  <div class="cause-title"><span class="num">6</span>Causa raiz definitiva — label do Traefik ausente desde a criação do arquivo</div>
+  <p>O container <span class="mono">vps-api</span> define <b>dois</b> services Traefik na mesma porta
+  (<span class="mono">okaikei-api</span> e <span class="mono">okaikei-internal</span>). Quando um container
+  define mais de um service, o Traefik exige o label explícito
+  <span class="mono">traefik.http.routers.&lt;nome&gt;.service=&lt;nome&gt;</span> para saber qual router
+  vai com qual service — sem ele, os dois routers são <b>descartados silenciosamente</b>, sem gerar erro
+  visível em uso normal (só apareceu com log em nível DEBUG). Esse bug existia desde a criação do arquivo;
+  nenhuma das correções anteriores (#1–#5) resolveria o problema sozinha por causa dele.</p>
+  <p><b>Correção:</b> adicionados os labels <span class="mono">traefik.http.routers.okaikei-api.service=okaikei-api</span>
+  e <span class="mono">traefik.http.routers.okaikei-internal.service=okaikei-internal</span>.</p>
+</div>
+
+<h2>Método de Diagnóstico</h2>
+<p>Cada camada da cadeia foi testada isoladamente até isolar exatamente onde a requisição parava:</p>
+<table>
+  <tr><th>Camada</th><th>Teste</th><th>Resultado antes</th><th>Resultado depois</th></tr>
+  <tr><td>Backend → Postgres</td><td><span class="mono">docker logs</span> do backend</td><td>Crash-loop (auth falhou)</td><td>Conectado</td></tr>
+  <tr><td>WSL → Windows (loopback)</td><td><span class="mono">curl localhost:3001</span></td><td>OK (mascarava o problema real)</td><td>OK</td></tr>
+  <tr><td>WireGuard → Backend</td><td><span class="mono">curl 10.0.0.2:3001</span> (de dentro da WSL e da VPS)</td><td>Recusado</td><td>200/401 corretos</td></tr>
+  <tr><td>vps-api → Backend local</td><td><span class="mono">docker logs okaikei_vps_api</span></td><td>ECONNREFUSED</td><td>"Menu cached"</td></tr>
+  <tr><td>Docker healthcheck</td><td><span class="mono">docker ps</span></td><td>unhealthy</td><td>healthy</td></tr>
+  <tr><td>Traefik → vps-api</td><td>log DEBUG do Traefik</td><td>Router descartado (erro de linking)</td><td>Router ativo</td></tr>
+  <tr><td>Ponta a ponta (público)</td><td><span class="mono">curl https://cardapio.bodogami.tech/api/menu</span></td><td>HTML do frontend (fallback)</td><td>JSON real do cardápio</td></tr>
+</table>
+
+<h2>Alterações no Repositório (versionadas)</h2>
+<p>Commit <span class="mono">20700e5</span> na branch <span class="mono">firebase</span>:</p>
+<div class="files-list">
+  <code>.github/workflows/deploy-vps.yml</code> — healthcheck do CI/CD corrigido (IPv6)<br/>
+  <code>docker-compose.hostinger.yml</code> — labels <span class="mono">.service=</span> do Traefik + healthcheck<br/>
+  <code>docker-compose.prod.yml</code> — porta publicada + <span class="mono">DATABASE_URL</span> apontando pro banco externo<br/>
+  <code>docker-compose.vps.yml</code> — healthcheck corrigido (IPv6)
+</div>
+
+<h2>Alterações Fora do Controle de Versão</h2>
+<p>Aplicadas diretamente na infraestrutura, <b>não</b> versionadas em git — importante para continuidade
+caso a equipe precise reconstruir o ambiente do zero:</p>
+<ul>
+  <li><b>Servidor do restaurante (Windows/WSL):</b> serviço systemd <span class="mono">cardapio-vpn-forward.service</span>
+  criado em <span class="mono">/etc/systemd/system/</span> na distro WSL Ubuntu, executando
+  <span class="mono">socat TCP-LISTEN:3001,bind=10.0.0.2,fork,reuseaddr TCP:127.0.0.1:3001</span>, habilitado
+  para iniciar no boot.</li>
+  <li><b>Postgres externo (10.5.103.73):</b> regra de <span class="mono">pg_hba.conf</span> liberando a
+  conexão do host Windows/Docker Desktop do restaurante (ajustada pela equipe durante o incidente).</li>
+  <li><b>Migração de dados:</b> dump/restore completo do banco <span class="mono">bodogami_prod</span>
+  (interno) para <span class="mono">okaikei</span> (externo, 10.5.103.73), incluindo schema, dados,
+  sequences, constraints e índices.</li>
+</ul>
+
+<h2>Recomendações</h2>
+<ul>
+  <li><b>Documentar o serviço systemd</b> do encaminhamento WireGuard→Docker no repositório (ex:
+  <span class="mono">vps-api/CLAUDE.md</span> ou um novo <span class="mono">docs/</span>), já que hoje só
+  existe na memória de quem configurou — se a WSL for reinstalada, essa etapa será perdida.</li>
+  <li><b>Testar o fluxo ponta a ponta após qualquer deploy</b> que toque backend, vps-api, ou configuração
+  do Traefik — nenhum desses seis problemas gerava erro óbvio isoladamente; só o teste real do
+  <span class="mono">https://cardapio.bodogami.tech/api/menu</span> expõe a cadeia completa.</li>
+  <li><b>Decidir o destino do Postgres interno</b> (<span class="mono">bodogami_prod_postgres</span>) —
+  ainda está no ar, sem uso, desde a migração. Pode ser mantido como backup temporário por um período de
+  segurança e depois desligado.</li>
+  <li><b>Investigar o aviso de NATS</b> ("Authorization Violation") observado nos logs do backend durante
+  o incidente — não bloqueia a aplicação, mas desativa eventos locais; não foi resolvido nesta investigação.</li>
+  <li><b>Considerar adicionar um healthcheck de ponta a ponta</b> (ex: um cron simples testando a URL
+  pública e alertando em caso de falha) para detectar esse tipo de regressão automaticamente, já que o
+  problema ficou sem ser notado por semanas.</li>
+</ul>
+
+<div class="footer-note">
+  Relatório gerado automaticamente a partir da investigação conduzida em conversa com Claude (Anthropic) — 02/09/2026.
+</div>
+
+</body>
+</html>

@@ -88,7 +88,7 @@ jobs:
 
             # Health check da API (dentro do container — não depende de porta publicada)
             echo ">>> Health check..."
-            docker exec okaikei_vps_api wget -qO- http://localhost:4000/health \
+            docker exec okaikei_vps_api wget -qO- http://127.0.0.1:4000/health \
               && echo "API: OK" || echo "API: FALHOU (verifique os logs)"
 
             # Limpa imagens antigas
