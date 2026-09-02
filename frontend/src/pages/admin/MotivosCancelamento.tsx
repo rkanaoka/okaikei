@@ -82,10 +82,10 @@ export default function MotivosCancelamento() {
               <h3 style={{ margin:0, fontSize:15, fontWeight:800, color:BRAND.navy }}>Histórico de Cancelamentos</h3>
             </div>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-              <TableHead cols={['Data','Item','Qtd.','Valor','Motivo']} />
+              <TableHead cols={['Data','Item','Qtd.','Valor','Motivo','Garçom']} />
               <tbody>
                 {history.length === 0 && (
-                  <tr><td colSpan={5} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>
+                  <tr><td colSpan={6} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>
                     Nenhum cancelamento registrado
                   </td></tr>
                 )}
@@ -100,6 +100,9 @@ export default function MotivosCancelamento() {
                         fontSize:11, fontWeight:700, color:'#555' }}>
                         {h.reason?.label ?? '—'}
                       </span>
+                    </td>
+                    <td style={{ padding:'10px 16px', color:'#666' }}>
+                      {h.garcom ? `${h.garcom.name} (${h.garcom.code})` : '—'}
                     </td>
                   </tr>
                 ))}

@@ -4,21 +4,25 @@ import { uuidv7 } from 'uuidv7';
 import { randomInt } from 'crypto';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const STATUSES = ['NEGOTIATION', 'PAID', 'USED', 'CANCELLED', 'EXPIRED'];
+const STATUSES = ['NEGOTIATION', 'PAID', 'USED', 'RECURRING', 'CANCELLED', 'EXPIRED'];
 const STATUS_LABELS: Record<string, string> = {
-  NEGOTIATION: 'Negociação', PAID: 'Pago', USED: 'Usado', CANCELLED: 'Cancelado', EXPIRED: 'Vencido',
+  NEGOTIATION: 'Negociação', PAID: 'Pago', USED: 'Usado', RECURRING: 'Recorrente', CANCELLED: 'Cancelado', EXPIRED: 'Vencido',
 };
 
 type VoucherInput = {
   customerName: string; customerCpf: string; customerBirthDate: string;
   customerAddress: string; customerPhone: string; customerEmail: string;
-  amount: number; dueDate: string; status?: string;
+  amount: number; dueDate?: string; status?: string; code?: string;
 };
 
 function generateCode(): string {
   let code = '';
   for (let i = 0; i < 8; i++) code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
   return code;
+}
+
+function sanitizeCustomCode(raw: string): string {
+  return raw.trim().toUpperCase().slice(0, 20);
 }
 
 function generatePassword(): string {
@@ -67,6 +71,7 @@ export class VouchersService {
   }
 
   private validate(dto: Partial<VoucherInput>, { partial }: { partial: boolean }) {
+    const isRecurring = dto.status === 'RECURRING';
     if (!partial || dto.customerName !== undefined)
       if (!dto.customerName?.trim()) throw new BadRequestException('Nome do cliente é obrigatório');
     if (!partial || dto.customerCpf !== undefined)
@@ -82,29 +87,50 @@ export class VouchersService {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dto.customerEmail ?? '')) throw new BadRequestException('E-mail inválido');
     if (!partial || dto.amount !== undefined)
       if (!dto.amount || dto.amount <= 0) throw new BadRequestException('Valor do voucher inválido');
-    if (!partial || dto.dueDate !== undefined)
+    // RECURRING: vencimento é opcional — sem prazo se não informado. Demais status: obrigatório.
+    if (!isRecurring && (!partial || dto.dueDate !== undefined)) {
       if (!dto.dueDate || isNaN(Date.parse(dto.dueDate))) throw new BadRequestException('Data de vencimento inválida');
+    } else if (dto.dueDate && isNaN(Date.parse(dto.dueDate))) {
+      throw new BadRequestException('Data de vencimento inválida');
+    }
     if (dto.status !== undefined && !STATUSES.includes(dto.status))
       throw new BadRequestException('Status inválido');
   }
 
   async create(dto: VoucherInput) {
     this.validate(dto, { partial: false });
+    const isRecurring = dto.status === 'RECURRING';
+    const base = {
+      id: uuidv7(),
+      customerName:      dto.customerName.trim(),
+      customerCpf:       dto.customerCpf.replace(/\D/g, ''),
+      customerBirthDate: new Date(dto.customerBirthDate),
+      customerAddress:   dto.customerAddress.trim(),
+      customerPhone:     dto.customerPhone.replace(/\D/g, ''),
+      customerEmail:     dto.customerEmail.trim(),
+      amount:  dto.amount,
+      dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+      status:  (dto.status ?? 'NEGOTIATION'),
+    };
+
+    // RECURRING com código customizado: tentativa única — colisão vira erro claro, não retry
+    if (isRecurring && dto.code?.trim()) {
+      const code = sanitizeCustomCode(dto.code);
+      if (!code) throw new BadRequestException('Código inválido');
+      try {
+        return await this.repo.create({ ...base, code, password: null });
+      } catch (e: any) {
+        if (e.code === 'P2002') throw new BadRequestException('Este código já está em uso por outro voucher');
+        throw e;
+      }
+    }
+
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         return await this.repo.create({
-          id: uuidv7(),
+          ...base,
           code: generateCode(),
-          password: generatePassword(),
-          customerName:      dto.customerName.trim(),
-          customerCpf:       dto.customerCpf.replace(/\D/g, ''),
-          customerBirthDate: new Date(dto.customerBirthDate),
-          customerAddress:   dto.customerAddress.trim(),
-          customerPhone:     dto.customerPhone.replace(/\D/g, ''),
-          customerEmail:     dto.customerEmail.trim(),
-          amount:  dto.amount,
-          dueDate: new Date(dto.dueDate),
-          status:  (dto.status ?? 'NEGOTIATION'),
+          password: isRecurring ? null : generatePassword(),
         });
       } catch (e: any) {
         if (e.code === 'P2002' && attempt < 4) continue;
@@ -117,7 +143,7 @@ export class VouchersService {
   async update(id: string, dto: Partial<VoucherInput>) {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundException('Voucher não encontrado');
-    this.validate(dto, { partial: true });
+    this.validate({ ...dto, status: dto.status ?? existing.status }, { partial: true });
     return this.repo.update(id, {
       ...(dto.customerName !== undefined      && { customerName: dto.customerName.trim() }),
       ...(dto.customerCpf !== undefined        && { customerCpf: dto.customerCpf.replace(/\D/g, '') }),
@@ -126,8 +152,23 @@ export class VouchersService {
       ...(dto.customerPhone !== undefined      && { customerPhone: dto.customerPhone.replace(/\D/g, '') }),
       ...(dto.customerEmail !== undefined      && { customerEmail: dto.customerEmail.trim() }),
       ...(dto.amount !== undefined             && { amount: dto.amount }),
-      ...(dto.dueDate !== undefined            && { dueDate: new Date(dto.dueDate) }),
+      ...(dto.dueDate !== undefined            && { dueDate: dto.dueDate ? new Date(dto.dueDate) : null }),
       ...(dto.status !== undefined             && { status: dto.status }),
     });
+  }
+
+  /** Aplica um voucher RECURRING no fechamento de conta — sem senha, apenas checa validade. */
+  async useRecurring(id: string) {
+    const voucher = await this.repo.findById(id);
+    if (!voucher) throw new NotFoundException('Voucher não encontrado');
+    if (voucher.status !== 'RECURRING') throw new BadRequestException('Este voucher não é do tipo recorrente');
+    if (voucher.dueDate && new Date(voucher.dueDate) < new Date()) {
+      throw new BadRequestException('Voucher recorrente vencido');
+    }
+    return { id: voucher.id, code: voucher.code, amount: voucher.amount, dueDate: voucher.dueDate, status: voucher.status };
+  }
+
+  async usageHistory() {
+    return this.repo.findUsageHistory();
   }
 }

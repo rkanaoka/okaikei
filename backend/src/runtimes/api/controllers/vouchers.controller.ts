@@ -20,11 +20,21 @@ export class VouchersController {
     return this.vouchers.confirmForUse(id, body.password);
   }
 
+  @Post(':id/use-recurring')
+  useRecurring(@Param('id') id: string) {
+    return this.vouchers.useRecurring(id);
+  }
+
+  @Get('usage-history')
+  usageHistory() {
+    return this.vouchers.usageHistory();
+  }
+
   @Post()
   create(@Body() body: {
     customerName: string; customerCpf: string; customerBirthDate: string;
     customerAddress: string; customerPhone: string; customerEmail: string;
-    amount: number; dueDate: string; status?: string;
+    amount: number; dueDate?: string; status?: string; code?: string;
   }) {
     return this.vouchers.create(body);
   }

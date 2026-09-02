@@ -40,4 +40,8 @@ export class ReasonsService {
     if (dto.type !== 'percent' && dto.type !== 'fixed') throw new BadRequestException('Tipo inválido');
     return this.repo.createDiscountReason({ id: uuidv7(), label: dto.label.trim(), type: dto.type, value: dto.value });
   }
+
+  async listDiscountHistory() {
+    return this.repo.findDiscountHistory();
+  }
 }

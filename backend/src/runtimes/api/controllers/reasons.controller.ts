@@ -29,4 +29,9 @@ export class ReasonsController {
   createDiscount(@Body() body: { label: string; type: 'percent'|'fixed'; value: number }) {
     return this.reasons.createDiscountReason(body);
   }
+
+  @Get('discount/history')
+  discountHistory() {
+    return this.reasons.listDiscountHistory();
+  }
 }

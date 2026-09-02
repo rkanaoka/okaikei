@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { vouchersApi } from '@/services/api';
-import { BRAND, fmtBRL, Card, PageHeader, Btn, TableHead } from './shared';
+import { BRAND, fmtBRL, fmtDate, Card, PageHeader, Btn, TableHead } from './shared';
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   NEGOTIATION: { label: 'Negociação', color: '#b38600',    bg: '#FFD60A22' },
   PAID:        { label: 'Pago',       color: BRAND.green,  bg: '#2DC65318' },
   USED:        { label: 'Usado',      color: BRAND.navy,   bg: '#0D1B2A14' },
+  RECURRING:   { label: 'Recorrente', color:'#5c6bc0',     bg: '#5c6bc022' },
   CANCELLED:   { label: 'Cancelado',  color: BRAND.red,    bg: '#E6394618' },
   EXPIRED:     { label: 'Vencido',    color: '#888',       bg: '#88888822' },
 };
@@ -45,6 +46,7 @@ const emptyForm: FormState = {
 
 export default function Vouchers() {
   const [vouchers, setVouchers] = useState<any[]>([]);
+  const [usages, setUsages]     = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [form, setForm]         = useState<FormState | null>(null);
   const [saving, setSaving]     = useState(false);
@@ -54,7 +56,10 @@ export default function Vouchers() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setVouchers(await vouchersApi.list() as unknown as any[]); }
+    try {
+      const [v, u] = await Promise.all([vouchersApi.list(), vouchersApi.usageHistory()]);
+      setVouchers(v as unknown as any[]); setUsages(u as unknown as any[]);
+    }
     catch(e) {}
     finally { setLoading(false); }
   }, []);
@@ -90,7 +95,8 @@ export default function Vouchers() {
     if (form.customerPhone.replace(/\D/g,'').length < 10) return setErr('Telefone inválido.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail)) return setErr('E-mail inválido.');
     if (!form.amount || parseFloat(form.amount) <= 0) return setErr('Informe um valor válido.');
-    if (!form.dueDate)                         return setErr('Informe a data de vencimento.');
+    // Vouchers RECURRING não exigem vencimento — ficam disponíveis sem prazo se não informado
+    if (form.status !== 'RECURRING' && !form.dueDate) return setErr('Informe a data de vencimento.');
 
     setSaving(true); setErr('');
     const payload = {
@@ -101,7 +107,7 @@ export default function Vouchers() {
       customerPhone: form.customerPhone,
       customerEmail: form.customerEmail.trim(),
       amount: parseFloat(form.amount),
-      dueDate: form.dueDate,
+      dueDate: form.dueDate || undefined,
       status: form.status,
     };
     try {
@@ -110,7 +116,10 @@ export default function Vouchers() {
         await load();
         setForm(null);
       } else {
-        const created: any = await vouchersApi.create(payload);
+        const created: any = await vouchersApi.create({
+          ...payload,
+          code: form.status === 'RECURRING' ? (form.code?.trim() || undefined) : undefined,
+        });
         await load();
         setForm(null);
         setJustCreated(created);
@@ -118,6 +127,8 @@ export default function Vouchers() {
     } catch (e: any) { setErr(e.message); }
     finally { setSaving(false); }
   }
+
+  const activeVouchers = vouchers.filter((v:any) => v.status !== 'USED');
 
   return (
     <div>
@@ -184,9 +195,12 @@ export default function Vouchers() {
                   onChange={e => setForm({ ...form, amount:e.target.value })} placeholder="100.00" style={inputStyle} />
               </div>
               <div style={{ flex:1 }}>
-                <label style={labelStyle}>Vencimento</label>
+                <label style={labelStyle}>Vencimento{form.status === 'RECURRING' ? ' (opcional)' : ''}</label>
                 <input type="date" value={form.dueDate}
                   onChange={e => setForm({ ...form, dueDate:e.target.value })} style={inputStyle} />
+                {form.status === 'RECURRING' && !form.dueDate && (
+                  <p style={{ margin:'4px 0 0', fontSize:11, color:'#999' }}>Sem prazo — disponível indefinidamente</p>
+                )}
               </div>
               <div style={{ flex:1 }}>
                 <label style={labelStyle}>Status</label>
@@ -196,6 +210,17 @@ export default function Vouchers() {
               </div>
             </div>
 
+            {form.status === 'RECURRING' && !form.id && (
+              <div style={{ marginBottom:14 }}>
+                <label style={labelStyle}>Código personalizado (opcional)</label>
+                <input value={form.code ?? ''} onChange={e => setForm({ ...form, code:e.target.value.toUpperCase() })}
+                  placeholder="Ex: FUNCIONARIO10 — deixe em branco para gerar automaticamente" style={inputStyle} />
+                <p style={{ margin:'4px 0 0', fontSize:11, color:'#999' }}>
+                  Vouchers recorrentes não exigem senha de confirmação e podem ser usados várias vezes até o vencimento.
+                </p>
+              </div>
+            )}
+
             {form.id && (
               <div style={{ display:'flex', gap:10, marginBottom:14, background:BRAND.gray, borderRadius:8, padding:'10px 12px' }}>
                 <div style={{ flex:1 }}>
@@ -204,7 +229,7 @@ export default function Vouchers() {
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:11, fontWeight:700, color:'#888' }}>Senha de confirmação</div>
-                  <div style={{ fontSize:15, fontWeight:800, color:BRAND.navy, letterSpacing:1 }}>{form.confirmationPassword}</div>
+                  <div style={{ fontSize:15, fontWeight:800, color:BRAND.navy, letterSpacing:1 }}>{form.confirmationPassword || '—'}</div>
                 </div>
               </div>
             )}
@@ -228,9 +253,17 @@ export default function Vouchers() {
             <p style={{ margin:'0 0 20px', fontSize:13, color:'#888' }}>{justCreated.customerName}</p>
             <div style={{ background:BRAND.gray, borderRadius:8, padding:'14px 16px', marginBottom:20 }}>
               <div style={{ fontSize:11, fontWeight:700, color:'#888', marginBottom:2 }}>Código do voucher</div>
-              <div style={{ fontSize:22, fontWeight:900, color:BRAND.navy, letterSpacing:2, marginBottom:12 }}>{justCreated.code}</div>
-              <div style={{ fontSize:11, fontWeight:700, color:'#888', marginBottom:2 }}>Senha de confirmação</div>
-              <div style={{ fontSize:22, fontWeight:900, color:BRAND.navy, letterSpacing:2 }}>{justCreated.confirmationPassword}</div>
+              <div style={{ fontSize:22, fontWeight:900, color:BRAND.navy, letterSpacing:2, marginBottom: justCreated.confirmationPassword ? 12 : 0 }}>{justCreated.code}</div>
+              {justCreated.confirmationPassword ? (
+                <>
+                  <div style={{ fontSize:11, fontWeight:700, color:'#888', marginBottom:2 }}>Senha de confirmação</div>
+                  <div style={{ fontSize:22, fontWeight:900, color:BRAND.navy, letterSpacing:2 }}>{justCreated.confirmationPassword}</div>
+                </>
+              ) : (
+                <p style={{ margin:0, fontSize:12, color:'#888' }}>
+                  Voucher recorrente — sem senha, pode ser usado várias vezes com esse código{justCreated.dueDate ? ' até o vencimento.' : ', sem prazo de validade.'}
+                </p>
+              )}
             </div>
             <Btn onClick={() => setJustCreated(null)}>Concluir</Btn>
           </div>
@@ -238,45 +271,78 @@ export default function Vouchers() {
       )}
 
       {loading ? <p style={{ color:'#aaa', fontSize:13 }}>Carregando...</p> : (
-        <Card style={{ padding:0, overflow:'hidden' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-            <TableHead cols={['Cliente','CPF','Valor','Vencimento','Status','Código','']} />
-            <tbody>
-              {vouchers.length === 0 && (
-                <tr><td colSpan={7} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>
-                  Nenhum voucher cadastrado
-                </td></tr>
-              )}
-              {vouchers.map((v:any) => {
-                const st = STATUS_LABELS[v.status] ?? STATUS_LABELS.NEGOTIATION;
-                const revealed = revealedId === v.id;
-                return (
-                  <tr key={v.id} style={{ borderBottom:'1px solid #f5f5f5' }}>
-                    <td style={{ padding:'12px 16px', fontWeight:700, color:BRAND.navy }}>{v.customerName}</td>
-                    <td style={{ padding:'12px 16px', color:'#666' }}>{maskCpf(v.customerCpf)}</td>
-                    <td style={{ padding:'12px 16px', fontWeight:800, color:BRAND.green }}>{fmtBRL(v.amount)}</td>
-                    <td style={{ padding:'12px 16px', color:'#666' }}>{new Date(v.dueDate).toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' })}</td>
-                    <td style={{ padding:'12px 16px' }}>
-                      <span style={{ fontSize:11, fontWeight:700, color:st.color, background:st.bg,
-                        borderRadius:999, padding:'3px 10px', textTransform:'uppercase' }}>{st.label}</span>
+        <>
+          <Card style={{ padding:0, overflow:'hidden', marginBottom:24 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <TableHead cols={['Cliente','CPF','Valor','Vencimento','Status','Código','']} />
+              <tbody>
+                {activeVouchers.length === 0 && (
+                  <tr><td colSpan={7} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>
+                    Nenhum voucher cadastrado
+                  </td></tr>
+                )}
+                {activeVouchers.map((v:any) => {
+                  const st = STATUS_LABELS[v.status] ?? STATUS_LABELS.NEGOTIATION;
+                  const revealed = revealedId === v.id;
+                  return (
+                    <tr key={v.id} style={{ borderBottom:'1px solid #f5f5f5' }}>
+                      <td style={{ padding:'12px 16px', fontWeight:700, color:BRAND.navy }}>{v.customerName}</td>
+                      <td style={{ padding:'12px 16px', color:'#666' }}>{maskCpf(v.customerCpf)}</td>
+                      <td style={{ padding:'12px 16px', fontWeight:800, color:BRAND.green }}>{fmtBRL(v.amount)}</td>
+                      <td style={{ padding:'12px 16px', color:'#666' }}>
+                        {v.dueDate ? new Date(v.dueDate).toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' }) : 'Sem vencimento'}
+                      </td>
+                      <td style={{ padding:'12px 16px' }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:st.color, background:st.bg,
+                          borderRadius:999, padding:'3px 10px', textTransform:'uppercase' }}>{st.label}</span>
+                      </td>
+                      <td style={{ padding:'12px 16px' }}>
+                        <div style={{ fontWeight:800, color:BRAND.navy, letterSpacing:1 }}>{v.code}</div>
+                        {v.confirmationPassword && (
+                          <button onClick={() => setRevealedId(revealed ? null : v.id)} style={{
+                            border:'none', background:'transparent', color:'#999', fontSize:11, cursor:'pointer', padding:0, fontFamily:'inherit',
+                          }}>
+                            {revealed ? `Senha: ${v.confirmationPassword}` : 'Ver senha'}
+                          </button>
+                        )}
+                      </td>
+                      <td style={{ padding:'12px 16px', textAlign:'right' }}>
+                        <Btn small variant="ghost" onClick={() => openEdit(v)}>Editar</Btn>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+
+          <Card style={{ padding:0, overflow:'hidden' }}>
+            <div style={{ padding:'16px 20px', borderBottom:'1px solid #f0f0f0' }}>
+              <h3 style={{ margin:0, fontSize:15, fontWeight:800, color:BRAND.navy }}>Histórico de Vouchers Usados</h3>
+            </div>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <TableHead cols={['Cliente','Código','Comanda','Valor aplicado','Usado em']} />
+              <tbody>
+                {usages.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>
+                    Nenhum voucher usado ainda
+                  </td></tr>
+                )}
+                {usages.map((u:any) => (
+                  <tr key={u.id} style={{ borderBottom:'1px solid #f0f0f0' }}>
+                    <td style={{ padding:'10px 16px', fontWeight:600, color:BRAND.navy }}>{u.voucher?.customerName ?? '—'}</td>
+                    <td style={{ padding:'10px 16px', fontWeight:800, color:BRAND.navy, letterSpacing:1 }}>{u.voucher?.code ?? '—'}</td>
+                    <td style={{ padding:'10px 16px', color:'#666' }}>
+                      {u.comanda ? `#${u.comanda.number}${u.comanda.table ? ` · ${u.comanda.table.label}` : ''}` : '—'}
                     </td>
-                    <td style={{ padding:'12px 16px' }}>
-                      <div style={{ fontWeight:800, color:BRAND.navy, letterSpacing:1 }}>{v.code}</div>
-                      <button onClick={() => setRevealedId(revealed ? null : v.id)} style={{
-                        border:'none', background:'transparent', color:'#999', fontSize:11, cursor:'pointer', padding:0, fontFamily:'inherit',
-                      }}>
-                        {revealed ? `Senha: ${v.confirmationPassword}` : 'Ver senha'}
-                      </button>
-                    </td>
-                    <td style={{ padding:'12px 16px', textAlign:'right' }}>
-                      <Btn small variant="ghost" onClick={() => openEdit(v)}>Editar</Btn>
-                    </td>
+                    <td style={{ padding:'10px 16px', fontWeight:700, color:BRAND.green }}>{fmtBRL(u.amount)}</td>
+                    <td style={{ padding:'10px 16px', color:'#999' }}>{fmtDate(u.usedAt)}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </>
       )}
     </div>
   );

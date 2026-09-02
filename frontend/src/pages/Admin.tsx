@@ -20,6 +20,7 @@ import Vouchers             from './admin/Vouchers';
 import ModelosImpressao     from './admin/ModelosImpressao';
 import ConfigLoja           from './admin/ConfigLoja';
 import GerarEtiquetas       from './admin/GerarEtiquetas';
+import Garcons              from './admin/Garcons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SectionId =
@@ -30,7 +31,7 @@ type SectionId =
   | 'rel-itens'      | 'rel-faturamento' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
   | 'estoque-etiquetas'
   | 'config-loja'    | 'config-horarios' | 'config-fiscal'
-  | 'config-cancelamento' | 'config-desconto' | 'config-impressao' | 'config-usuarios';
+  | 'config-cancelamento' | 'config-desconto' | 'config-impressao' | 'config-usuarios' | 'config-garcons';
 
 // Chave de permissão de cada entrada de topo — ver frontend/src/pages/admin/permissions.ts
 const NAV: Array<
@@ -69,6 +70,7 @@ const NAV: Array<
     { id:'config-desconto',      label:'Motivos de desconto' },
     { id:'config-impressao',     label:'Modelos de impressão' },
     { id:'config-usuarios',      label:'Usuários' },
+    { id:'config-garcons',       label:'Garçons' },
   ]},
 ];
 
@@ -126,6 +128,7 @@ function renderSection(id: SectionId) {
     case 'config-desconto':     return <MotivosDesconto />;
     case 'config-impressao':    return <ModelosImpressao />;
     case 'config-usuarios':     return <Usuarios />;
+    case 'config-garcons':      return <Garcons />;
     default:                    return <Dashboard />;
   }
 }

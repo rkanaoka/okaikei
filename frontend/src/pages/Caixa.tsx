@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { comandasApi, reasonsApi, menuApi, tablesApi, vouchersApi } from '@/services/api';
+import { comandasApi, reasonsApi, menuApi, tablesApi, vouchersApi, garconsApi } from '@/services/api';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653', navyLight:'#1A2E44', cream:'#FFF8F0' };
 const fmtBRL = (v:any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
@@ -83,7 +83,7 @@ const STATUS_CFG: Record<string,{label:string;color:string;bg:string}> = {
 };
 
 const VOUCHER_STATUS_LABELS: Record<string,string> = {
-  NEGOTIATION:'Negociação', PAID:'Pago', USED:'Usado', CANCELLED:'Cancelado', EXPIRED:'Vencido',
+  NEGOTIATION:'Negociação', PAID:'Pago', USED:'Usado', RECURRING:'Recorrente', CANCELLED:'Cancelado', EXPIRED:'Vencido',
 };
 
 const ITEM_STATUS_CFG: Record<string,{label:string;color:string}> = {
@@ -120,6 +120,12 @@ export default function Caixa() {
   const [surcharge, setSurcharge] = useState<{ type: 'percent'|'fixed'|''; value: string }>({ type:'percent', value:'10' });
   const [payments,  setPayments]  = useState<Payment[]>([{ method:'CASH', amount:'' }]);
 
+  // Garçom responsável pelo fechamento (ID de 3 dígitos)
+  const [garcomCode, setGarcomCode]               = useState('');
+  const [garcomLookup, setGarcomLookup]           = useState<any>(null);
+  const [garcomLookupError, setGarcomLookupError] = useState('');
+  const [garcomLookupLoading, setGarcomLookupLoading] = useState(false);
+
   const [paying, setPaying]     = useState(false);
   const [payError, setPayError] = useState('');
   const [showPay,  setShowPay]  = useState(false);
@@ -127,7 +133,11 @@ export default function Caixa() {
   const [cancelReasons, setCancelReasons] = useState<any[]>([]);
   const [cancelTarget, setCancelTarget]   = useState<any>(null);
   const [cancelReasonId, setCancelReasonId] = useState('');
-  const [cancelPassword, setCancelPassword] = useState('');
+  // Garçom que confirma o cancelamento (substitui a antiga senha de segurança)
+  const [cancelGarcomCode, setCancelGarcomCode]               = useState('');
+  const [cancelGarcomLookup, setCancelGarcomLookup]           = useState<any>(null);
+  const [cancelGarcomLookupError, setCancelGarcomLookupError] = useState('');
+  const [cancelGarcomLookupLoading, setCancelGarcomLookupLoading] = useState(false);
   const [cancelling, setCancelling]         = useState(false);
   const [cancelError, setCancelError]       = useState('');
 
@@ -223,17 +233,33 @@ export default function Caixa() {
   function openCancelModal(item: any) {
     setCancelTarget(item);
     setCancelReasonId('');
-    setCancelPassword('');
+    setCancelGarcomCode(''); setCancelGarcomLookup(null); setCancelGarcomLookupError('');
     setCancelError('');
+  }
+
+  async function lookupCancelGarcom(code: string) {
+    setCancelGarcomLookupLoading(true); setCancelGarcomLookupError('');
+    try {
+      const g = await garconsApi.getByCode(code);
+      setCancelGarcomLookup(g);
+    } catch (e:any) { setCancelGarcomLookupError(e.message); }
+    finally { setCancelGarcomLookupLoading(false); }
+  }
+
+  function onCancelGarcomCodeChange(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 3);
+    setCancelGarcomCode(digits);
+    setCancelGarcomLookup(null); setCancelGarcomLookupError('');
+    if (digits.length === 3) lookupCancelGarcom(digits);
   }
 
   async function confirmCancelItem() {
     if (!id || !cancelTarget) return;
     if (!cancelReasonId) { setCancelError('Selecione um motivo.'); return; }
-    if (!cancelPassword) { setCancelError('Informe a senha de segurança.'); return; }
+    if (!cancelGarcomLookup) { setCancelError('Informe o ID do garçom responsável pelo cancelamento.'); return; }
     setCancelling(true); setCancelError('');
     try {
-      await comandasApi.removeItem(id, cancelTarget.id, { reasonId: cancelReasonId, password: cancelPassword });
+      await comandasApi.removeItem(id, cancelTarget.id, { reasonId: cancelReasonId, garcomId: cancelGarcomLookup.id });
       setCancelTarget(null);
       await load();
     } catch (e:any) {
@@ -440,12 +466,48 @@ export default function Caixa() {
     finally { setVoucherConfirming(false); }
   }
 
+  // Vouchers RECURRING: sem senha, apenas confirma que ainda está dentro do prazo
+  async function applyRecurringVoucher() {
+    if (!voucherLookup) return;
+    setVoucherConfirming(true); setVoucherConfirmError('');
+    try {
+      const v: any = await vouchersApi.useRecurring(voucherLookup.id);
+      setAppliedVoucher(v);
+      setVoucherLookup(null); setVoucherCode(''); setVoucherPassword('');
+    } catch (e:any) { setVoucherConfirmError(e.message); }
+    finally { setVoucherConfirming(false); }
+  }
+
   function removeVoucher() {
     setAppliedVoucher(null);
   }
 
+  // ── Garçom responsável (fechamento) ──────────────────────────────────────
+
+  function openPayDialog() {
+    setGarcomCode(''); setGarcomLookup(null); setGarcomLookupError('');
+    setShowPay(true);
+  }
+
+  async function lookupGarcom(code: string) {
+    setGarcomLookupLoading(true); setGarcomLookupError('');
+    try {
+      const g = await garconsApi.getByCode(code);
+      setGarcomLookup(g);
+    } catch (e:any) { setGarcomLookupError(e.message); }
+    finally { setGarcomLookupLoading(false); }
+  }
+
+  function onGarcomCodeChange(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 3);
+    setGarcomCode(digits);
+    setGarcomLookup(null); setGarcomLookupError('');
+    if (digits.length === 3) lookupGarcom(digits);
+  }
+
   async function pay() {
     if (remaining > 0.01) { setPayError('Valor recebido insuficiente.'); return; }
+    if (!garcomLookup) { setPayError('Informe o ID do garçom responsável pelo fechamento.'); return; }
     const validPays = payments.filter(p => parseFloat(p.amount) > 0);
     if (total > 0 && !validPays.length) { setPayError('Adicione ao menos um pagamento.'); return; }
     setPaying(true); setPayError('');
@@ -454,9 +516,11 @@ export default function Caixa() {
         payments: validPays.map(p => ({ method: p.method, amount: parseFloat(p.amount) })),
         discountType:   discVal > 0 ? discount.type : undefined,
         discountValue:  discVal > 0 ? (parseFloat(discount.value) || 0) : undefined,
+        discountReasonId: discVal > 0 && discountReasonId ? discountReasonId : undefined,
         surchargeType:  surcharge.type || undefined,
         surchargeValue: surcharge.type ? (parseFloat(surcharge.value) || 0) : undefined,
         voucherId: appliedVoucher?.id || undefined,
+        closedByGarcomId: garcomLookup.id,
       });
       await load();
       setShowPay(false);
@@ -580,12 +644,14 @@ export default function Caixa() {
                     <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:4 }}>
                       <span style={{ color:'#666' }}>Vencimento</span>
                       <span style={{ fontWeight:700, color:BRAND.navy }}>
-                        {new Date(voucherLookup.dueDate).toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' })}
+                        {voucherLookup.dueDate
+                          ? new Date(voucherLookup.dueDate).toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' })
+                          : 'Sem vencimento'}
                       </span>
                     </div>
-                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom: voucherLookup.status==='PAID' ? 10 : 0 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom: (voucherLookup.status==='PAID' || voucherLookup.status==='RECURRING') ? 10 : 0 }}>
                       <span style={{ color:'#666' }}>Status</span>
-                      <span style={{ fontWeight:700, color: voucherLookup.status==='PAID' ? BRAND.green : BRAND.red }}>
+                      <span style={{ fontWeight:700, color: (voucherLookup.status==='PAID' || voucherLookup.status==='RECURRING') ? BRAND.green : BRAND.red }}>
                         {VOUCHER_STATUS_LABELS[voucherLookup.status] ?? voucherLookup.status}
                       </span>
                     </div>
@@ -603,6 +669,16 @@ export default function Caixa() {
                           padding:'8px', cursor:'pointer', fontWeight:800, fontSize:13, fontFamily:'inherit',
                         }}>
                           {voucherConfirming ? 'Confirmando…' : 'Aplicar Voucher'}
+                        </button>
+                      </>
+                    ) : voucherLookup.status === 'RECURRING' ? (
+                      <>
+                        {voucherConfirmError && <p style={{ color:BRAND.red, fontSize:12, fontWeight:700, margin:'0 0 8px' }}>{voucherConfirmError}</p>}
+                        <button onClick={applyRecurringVoucher} disabled={voucherConfirming} style={{
+                          width:'100%', background:BRAND.green, color:'#fff', border:'none', borderRadius:8,
+                          padding:'8px', cursor:'pointer', fontWeight:800, fontSize:13, fontFamily:'inherit',
+                        }}>
+                          {voucherConfirming ? 'Aplicando…' : 'Aplicar Voucher'}
                         </button>
                       </>
                     ) : (
@@ -685,7 +761,7 @@ export default function Caixa() {
               <PillBtn variant="ghost" onClick={handlePrintSummary} disabled={printingSummary}>
                 {printingSummary ? 'Imprimindo…' : '🖨 Imprimir Resumo'}
               </PillBtn>
-              <PillBtn onClick={()=>setShowPay(true)}>Fechar Conta</PillBtn>
+              <PillBtn onClick={openPayDialog}>Fechar Conta</PillBtn>
             </div>
             {summaryMsg && <p style={{ color:BRAND.green, fontWeight:700, fontSize:13, margin:0 }}>{summaryMsg}</p>}
             {summaryError && <p style={{ color:BRAND.red, fontWeight:700, fontSize:13, margin:0 }}>{summaryError}</p>}
@@ -700,6 +776,28 @@ export default function Caixa() {
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
               <div style={{ fontWeight:900, fontSize:20, color:BRAND.navy }}>Fechar Conta</div>
               <button onClick={()=>setShowPay(false)} style={{ background:'none',border:'none',fontSize:24,cursor:'pointer',color:BRAND.navy }}>✕</button>
+            </div>
+
+            {/* Garçom responsável pelo fechamento */}
+            <div style={{ marginBottom:20 }}>
+              <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#666', marginBottom:6 }}>
+                Garçom responsável (ID de 3 dígitos)
+              </label>
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <input
+                  autoFocus
+                  inputMode="numeric"
+                  maxLength={3}
+                  value={garcomCode}
+                  onChange={e=>onGarcomCodeChange(e.target.value)}
+                  placeholder="000"
+                  style={{ width:90, border:`2px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px',
+                    fontWeight:800, fontSize:18, textAlign:'center', letterSpacing:4, outline:'none' }}
+                />
+                {garcomLookupLoading && <span style={{ fontSize:13, color:'#888' }}>Buscando…</span>}
+                {garcomLookup && <span style={{ fontSize:14, fontWeight:800, color:BRAND.green }}>✓ {garcomLookup.name}</span>}
+                {garcomLookupError && <span style={{ fontSize:13, fontWeight:700, color:BRAND.red }}>{garcomLookupError}</span>}
+              </div>
             </div>
 
             {/* Summary chip */}
@@ -797,11 +895,24 @@ export default function Caixa() {
 
             <div style={{ marginBottom:8 }}>
               <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#666', marginBottom:6, textTransform:'uppercase', letterSpacing:.5 }}>
-                Senha de segurança
+                Garçom responsável (ID de 3 dígitos)
               </label>
-              <input type="password" value={cancelPassword} onChange={e=>setCancelPassword(e.target.value)}
-                onKeyDown={e=>e.key==='Enter' && confirmCancelItem()}
-                style={{ width:'100%', boxSizing:'border-box', border:`2px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }} />
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <input
+                  autoFocus
+                  inputMode="numeric"
+                  maxLength={3}
+                  value={cancelGarcomCode}
+                  onChange={e=>onCancelGarcomCodeChange(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter' && confirmCancelItem()}
+                  placeholder="000"
+                  style={{ width:90, border:`2px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px',
+                    fontWeight:800, fontSize:18, textAlign:'center', letterSpacing:4, outline:'none' }}
+                />
+                {cancelGarcomLookupLoading && <span style={{ fontSize:13, color:'#888' }}>Buscando…</span>}
+                {cancelGarcomLookup && <span style={{ fontSize:14, fontWeight:800, color:BRAND.green }}>✓ {cancelGarcomLookup.name}</span>}
+                {cancelGarcomLookupError && <span style={{ fontSize:13, fontWeight:700, color:BRAND.red }}>{cancelGarcomLookupError}</span>}
+              </div>
             </div>
 
             {cancelError && <p style={{ color:BRAND.red, fontSize:13, fontWeight:700, marginBottom:12 }}>{cancelError}</p>}

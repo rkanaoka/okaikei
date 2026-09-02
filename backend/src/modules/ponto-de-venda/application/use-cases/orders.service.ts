@@ -8,8 +8,6 @@ import { PrintingService } from '@/modules/ponto-de-venda/application/use-cases/
 import { ComandaStatus, PaymentMethod } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 
-const CANCEL_PASSWORD = '123';
-
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -104,9 +102,12 @@ export class OrdersService {
     return { comanda: enriched, items: inserted };
   }
 
-  async removeItem(comandaId: string, itemId: string, dto: { reasonId: string; password: string }) {
-    if (dto.password !== CANCEL_PASSWORD) throw new BadRequestException('Senha de segurança incorreta');
+  async removeItem(comandaId: string, itemId: string, dto: { reasonId: string; garcomId: string }) {
     if (!dto.reasonId) throw new BadRequestException('Selecione um motivo de cancelamento');
+    if (!dto.garcomId) throw new BadRequestException('Informe o garçom responsável pelo cancelamento');
+
+    const garcom = await this.repo.findGarcomById(dto.garcomId);
+    if (!garcom || !garcom.active) throw new BadRequestException('Garçom não encontrado');
 
     const comanda = await this.repo.findById(comandaId);
     if (!comanda) throw new NotFoundException('Comanda não encontrada');
@@ -122,6 +123,7 @@ export class OrdersService {
       itemId,
       comandaId,
       reasonId:  dto.reasonId,
+      garcomId:  dto.garcomId,
       itemName:  item.menuItem.name,
       quantity:  item.quantity,
       amount:    Number(item.unitPrice) * item.quantity,
@@ -239,12 +241,24 @@ export class OrdersService {
     discountType?:   string;
     discountValue?:  number;
     voucherId?:      string;
+    closedByGarcomId?: string;
+    discountReasonId?: string;
     payments: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
     printReceipt?: boolean;
   }) {
     const comanda = await this.repo.findById(comandaId);
     if (!comanda) throw new NotFoundException('Comanda não encontrada');
     if (comanda.status === 'CLOSED') throw new BadRequestException('Comanda já fechada');
+
+    if (dto.closedByGarcomId) {
+      const garcom = await this.repo.findGarcomById(dto.closedByGarcomId);
+      if (!garcom || !garcom.active) throw new BadRequestException('Garçom responsável pelo fechamento não encontrado');
+    }
+
+    if (dto.discountReasonId) {
+      const discountReason = await this.repo.findDiscountReasonById(dto.discountReasonId);
+      if (!discountReason) throw new BadRequestException('Motivo de desconto não encontrado');
+    }
 
     const subtotal       = comanda.items.reduce((s: number, i: any) => s + Number(i.unitPrice) * i.quantity, 0);
     const serviceFeeBase = this.serviceFeeBase(comanda.items);
@@ -253,8 +267,14 @@ export class OrdersService {
     let voucher: any    = null;
     if (dto.voucherId) {
       voucher = await this.repo.findVoucherById(dto.voucherId);
-      if (!voucher)                      throw new BadRequestException('Voucher não encontrado');
-      if (voucher.status !== 'PAID')     throw new BadRequestException('Voucher não está disponível para uso');
+      if (!voucher) throw new BadRequestException('Voucher não encontrado');
+      const isRecurringVoucher = voucher.status === 'RECURRING';
+      if (!isRecurringVoucher && voucher.status !== 'PAID') {
+        throw new BadRequestException('Voucher não está disponível para uso');
+      }
+      if (isRecurringVoucher && voucher.dueDate && new Date(voucher.dueDate) < new Date()) {
+        throw new BadRequestException('Voucher recorrente vencido');
+      }
       voucherDiscount = Math.min(subtotal, Number(voucher.amount));
     }
 
@@ -284,6 +304,8 @@ export class OrdersService {
           discountValue:  dto.discountValue  ?? 0,
           voucherCode:    voucher?.code       ?? null,
           voucherDiscount,
+          closedByGarcomId: dto.closedByGarcomId ?? null,
+          discountReasonId: dto.discountReasonId ?? null,
         },
         payments: dto.payments.map((p) => ({
           id:            uuidv7(),
@@ -293,6 +315,7 @@ export class OrdersService {
           cashSessionId: openSession?.id ?? null,
         })),
         voucherId: dto.voucherId,
+        voucherDiscount,
       },
     );
 

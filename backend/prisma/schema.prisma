@@ -25,6 +25,7 @@ model User {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   comandas Comanda[]
+  garcom   Garcom?
 
   @@map("users")
 }
@@ -34,6 +35,23 @@ enum UserRole {
   CASHIER
   WAITER
   KITCHEN
+}
+
+// ─── Garçons (cadastro operacional, distinto do User de acesso ao sistema) ───
+model Garcom {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  code      String   @unique @db.VarChar(3) // ID numérico de 3 dígitos, informado no fechamento da comanda
+  name      String   @db.VarChar(100)
+  userId    String?  @unique @map("user_id") @db.Uuid // vínculo opcional a um usuário do sistema
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user            User?          @relation(fields: [userId], references: [id])
+  closedComandas  Comanda[]      @relation("ComandaClosedByGarcom")
+  cancellations   Cancellation[]
+
+  @@map("garcons")
 }
 
 // ─── Categorias do Cardápio (organização/exibição) ────────────────────────────
@@ -146,24 +164,33 @@ model Comanda {
   // Ajustes de fechamento
   surchargeType  String?  @map("surcharge_type") @db.VarChar(10) // 'percent' | 'fixed'
   surchargeValue Decimal? @default(0) @map("surcharge_value") @db.Decimal(10, 2)
-  discountType   String?  @map("discount_type") @db.VarChar(10)
-  discountValue  Decimal? @default(0) @map("discount_value") @db.Decimal(10, 2)
+  discountType     String?  @map("discount_type") @db.VarChar(10)
+  discountValue    Decimal? @default(0) @map("discount_value") @db.Decimal(10, 2)
+  discountReasonId String?  @map("discount_reason_id") @db.Uuid
   // Voucher (cupom de desconto) aplicado no fechamento — snapshot, ver Voucher.comandaId para o vínculo
   voucherCode     String?  @map("voucher_code") @db.VarChar(12)
   voucherDiscount Decimal  @default(0) @map("voucher_discount") @db.Decimal(10, 2)
+
+  // Garçom que efetuou o fechamento (informado por ID de 3 dígitos na tela de Caixa)
+  closedByGarcomId String? @map("closed_by_garcom_id") @db.Uuid
 
   openedAt  DateTime  @default(now()) @map("opened_at")
   closedAt  DateTime? @map("closed_at")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  table        Table?        @relation(fields: [tableId], references: [id])
-  user         User?         @relation(fields: [userId], references: [id])
-  items        ComandaItem[]
-  payments     Payment[]
+  table          Table?          @relation(fields: [tableId], references: [id])
+  user           User?           @relation(fields: [userId], references: [id])
+  closedByGarcom Garcom?         @relation("ComandaClosedByGarcom", fields: [closedByGarcomId], references: [id])
+  discountReason DiscountReason? @relation(fields: [discountReasonId], references: [id])
+  items          ComandaItem[]
+  payments       Payment[]
+  voucherUsages  VoucherUsage[]
 
   @@index([status])
   @@index([openedAt])
+  @@index([closedByGarcomId])
+  @@index([discountReasonId])
   @@map("comandas")
 }
 
@@ -245,14 +272,18 @@ model Cancellation {
   id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   reasonId  String   @map("reason_id") @db.Uuid
   comandaId String?  @map("comanda_id") @db.Uuid
+  // Garçom que confirmou o cancelamento (código de 3 dígitos, no lugar da antiga senha de segurança)
+  garcomId  String?  @map("garcom_id") @db.Uuid
   itemName  String   @map("item_name") @db.VarChar(120)
   quantity  Int      @default(1)
   amount    Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now()) @map("created_at")
 
   reason CancellationReason @relation(fields: [reasonId], references: [id])
+  garcom Garcom?            @relation(fields: [garcomId], references: [id])
 
   @@index([reasonId])
+  @@index([garcomId])
   @@map("cancellations")
 }
 
@@ -264,14 +295,17 @@ model DiscountReason {
   value     Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now()) @map("created_at")
 
+  comandas Comanda[]
+
   @@map("discount_reasons")
 }
 
 // ─── Vouchers (Cupons de Desconto) ─────────────────────────────────────────────
 model Voucher {
   id                   String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  code                 String        @unique @db.VarChar(12)
-  confirmationPassword String        @map("confirmation_password") @db.VarChar(6)
+  code                 String        @unique @db.VarChar(20)
+  // Vouchers RECURRING não exigem senha de conferência — nulo nesse caso
+  confirmationPassword String?       @map("confirmation_password") @db.VarChar(6)
   customerName         String        @map("customer_name") @db.VarChar(100)
   customerCpf          String        @map("customer_cpf") @db.VarChar(14)
   customerBirthDate    DateTime      @map("customer_birth_date") @db.Date
@@ -280,11 +314,14 @@ model Voucher {
   customerEmail        String        @map("customer_email") @db.VarChar(200)
   amount               Decimal       @db.Decimal(10, 2)
   status               VoucherStatus @default(NEGOTIATION)
-  dueDate              DateTime      @map("due_date") @db.Date
-  // Comanda em que o voucher foi usado (preenchido no fechamento da conta) — consulta/histórico
+  // Nulo = sem prazo de validade (permitido apenas para vouchers RECURRING)
+  dueDate              DateTime?     @map("due_date") @db.Date
+  // Comanda em que o voucher foi usado pela 1a vez (legado) — ver VoucherUsage para o histórico completo
   comandaId            String?       @map("comanda_id") @db.Uuid
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  usages VoucherUsage[]
 
   @@map("vouchers")
 }
@@ -293,8 +330,28 @@ enum VoucherStatus {
   NEGOTIATION
   PAID
   USED
+  // Reutilizável até o vencimento (ou sem prazo, se dueDate for nulo) — sem senha, código customizável
+  RECURRING
   CANCELLED
   EXPIRED
+}
+
+// Log de cada uso de voucher no fechamento de uma comanda — alimenta o "Histórico de
+// Vouchers Usados". Vouchers RECURRING podem gerar múltiplos registros; os demais, no
+// máximo um (ao ficarem USED).
+model VoucherUsage {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  voucherId String   @map("voucher_id") @db.Uuid
+  comandaId String?  @map("comanda_id") @db.Uuid
+  amount    Decimal  @db.Decimal(10, 2) // valor efetivamente aplicado nessa comanda
+  usedAt    DateTime @default(now()) @map("used_at")
+
+  voucher Voucher  @relation(fields: [voucherId], references: [id])
+  comanda Comanda? @relation(fields: [comandaId], references: [id])
+
+  @@index([voucherId])
+  @@index([comandaId])
+  @@map("voucher_usages")
 }
 
 // ─── Modelos de Impressão ─────────────────────────────────────────────────────

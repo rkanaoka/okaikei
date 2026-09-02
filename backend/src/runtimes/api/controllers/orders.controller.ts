@@ -45,7 +45,7 @@ export class OrdersController {
   removeItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
-    @Body() body: { reasonId: string; password: string },
+    @Body() body: { reasonId: string; garcomId: string },
   ) {
     return this.orders.removeItem(id, itemId, body);
   }
@@ -86,6 +86,8 @@ export class OrdersController {
       discountType?:   string;
       discountValue?:  number;
       voucherId?:      string;
+      closedByGarcomId?: string;
+      discountReasonId?: string;
       payments: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
       printReceipt?: boolean;
     },

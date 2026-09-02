@@ -28,7 +28,7 @@ export class PrismaReasonsRepository implements ReasonsRepositoryPort {
 
   async findCancellationHistory() {
     return this.prisma.cancellation.findMany({
-      include: { reason: true },
+      include: { reason: true, garcom: { select: { id: true, code: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -53,5 +53,18 @@ export class PrismaReasonsRepository implements ReasonsRepositoryPort {
 
   async deleteDiscountReason(id: string) {
     return this.prisma.discountReason.delete({ where: { id } });
+  }
+
+  async findDiscountHistory() {
+    return this.prisma.comanda.findMany({
+      where:   { discountReasonId: { not: null } },
+      select: {
+        id: true, number: true, closedAt: true, discountType: true, discountValue: true,
+        table:          { select: { label: true } },
+        discountReason: { select: { id: true, label: true } },
+        closedByGarcom: { select: { id: true, code: true, name: true } },
+      },
+      orderBy: { closedAt: 'desc' },
+    });
   }
 }

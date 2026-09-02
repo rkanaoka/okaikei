@@ -34,7 +34,7 @@ export interface OrdersRepositoryPort {
   // Cancellation
   findCancellationReasonById(reasonId: string): Promise<any | null>;
   cancelItemWithRecord(data: {
-    itemId: string; comandaId: string; reasonId: string; itemName: string;
+    itemId: string; comandaId: string; reasonId: string; garcomId: string; itemName: string;
     quantity: number; amount: number;
   }): Promise<void>;
   createCancellationRecord(data: {
@@ -47,11 +47,18 @@ export interface OrdersRepositoryPort {
     closureData: Record<string, any>;
     payments: Array<{ id: string; method: string; amount: number; notes?: string | null; cashSessionId?: string | null }>;
     voucherId?: string;
+    voucherDiscount?: number;
   }): Promise<{ comanda: any; payments: any[] }>;
 
   // Vouchers
   findVoucherById(id: string): Promise<any | null>;
   findVoucherByCode(code: string): Promise<any | null>;
+
+  // Garçons
+  findGarcomById(id: string): Promise<any | null>;
+
+  // Motivos de Desconto
+  findDiscountReasonById(id: string): Promise<any | null>;
 
   // Merge
   mergeComandas(targetId: string, sourceIds: string[], notes: string): Promise<any>;

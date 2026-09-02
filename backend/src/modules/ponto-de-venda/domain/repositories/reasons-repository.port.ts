@@ -11,4 +11,5 @@ export interface ReasonsRepositoryPort {
   findDiscountUsageCounts(): Promise<Array<{ reasonId: string; count: number }>>;
   createDiscountReason(data: { id: string; label: string; type: string; value: number }): Promise<any>;
   deleteDiscountReason(id: string): Promise<any>;
+  findDiscountHistory(): Promise<any[]>;
 }

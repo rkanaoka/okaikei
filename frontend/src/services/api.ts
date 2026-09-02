@@ -86,7 +86,7 @@ export const comandasApi = {
   addItems: (id: string, items: Array<{ menuItemId: string; quantity: number; notes?: string }>, print = true) =>
     http.post(`/comandas/${id}/items`, { items, print }),
 
-  removeItem: (id: string, itemId: string, d: { reasonId: string; password: string }) =>
+  removeItem: (id: string, itemId: string, d: { reasonId: string; garcomId: string }) =>
     http.delete(`/comandas/${id}/items/${itemId}`, { data: d }),
 
   transferItems: (id: string, d: { itemIds: string[]; targetComandaId: string }) =>
@@ -102,6 +102,8 @@ export const comandasApi = {
     surchargeType?: string; surchargeValue?: number;
     discountType?:  string; discountValue?:  number;
     voucherId?:     string;
+    closedByGarcomId?: string;
+    discountReasonId?: string;
     payments: Array<{ method: string; amount: number }>;
     printReceipt?: boolean;
   }) => http.post(`/comandas/${id}/pay`, d),
@@ -132,8 +134,9 @@ export const reasonsApi = {
     history: () => http.get('/reasons/cancellation/history'),
   },
   discount: {
-    list:   () => http.get('/reasons/discount'),
-    create: (d: { label: string; type: 'percent'|'fixed'; value: number }) => http.post('/reasons/discount', d),
+    list:    () => http.get('/reasons/discount'),
+    create:  (d: { label: string; type: 'percent'|'fixed'; value: number }) => http.post('/reasons/discount', d),
+    history: () => http.get('/reasons/discount/history'),
   },
 };
 
@@ -141,7 +144,7 @@ export const reasonsApi = {
 export type VoucherInput = {
   customerName: string; customerCpf: string; customerBirthDate: string;
   customerAddress: string; customerPhone: string; customerEmail: string;
-  amount: number; dueDate: string; status?: string;
+  amount: number; dueDate?: string; status?: string; code?: string;
 };
 
 export const vouchersApi = {
@@ -151,6 +154,20 @@ export const vouchersApi = {
 
   getByCode: (code: string) => http.get(`/vouchers/by-code/${encodeURIComponent(code)}`),
   confirm:   (id: string, password: string) => http.post(`/vouchers/${id}/confirm`, { password }),
+  // Vouchers RECURRING: aplica sem senha, apenas checa validade
+  useRecurring: (id: string) => http.post(`/vouchers/${id}/use-recurring`, {}),
+  usageHistory: () => http.get('/vouchers/usage-history'),
+};
+
+// ── Garçons ──────────────────────────────────────────────────────────────────
+export type GarcomRow = { id: string; code: string; name: string; userId: string | null; active: boolean; user: { id: string; name: string; email: string } | null };
+
+export const garconsApi = {
+  list:   () => http.get('/garcons') as unknown as Promise<GarcomRow[]>,
+  create: (d: { name: string; userId?: string | null }) => http.post('/garcons', d),
+  update: (id: string, d: { name?: string; userId?: string | null; active?: boolean }) => http.patch(`/garcons/${id}`, d),
+
+  getByCode: (code: string) => http.get(`/garcons/by-code/${encodeURIComponent(code)}`) as unknown as Promise<{ id: string; code: string; name: string }>,
 };
 
 // ── Modelos de Impressão ────────────────────────────────────────────────────────

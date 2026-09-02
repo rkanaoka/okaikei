@@ -31,24 +31,34 @@ export class PrismaVoucherRepository implements VoucherRepositoryPort {
   }
 
   async create(data: {
-    id: string; code: string; password: string;
+    id: string; code: string; password?: string | null;
     customerName: string; customerCpf: string; customerBirthDate: Date;
     customerAddress: string; customerPhone: string; customerEmail: string;
-    amount: number; dueDate: Date; status: string;
+    amount: number; dueDate: Date | null; status: string;
   }) {
     const { password, ...rest } = data;
-    return this.v.create({ data: { ...rest, confirmationPassword: password } });
+    return this.v.create({ data: { ...rest, confirmationPassword: password ?? null } });
   }
 
   async update(id: string, data: Partial<{
     customerName: string; customerCpf: string; customerBirthDate: Date;
     customerAddress: string; customerPhone: string; customerEmail: string;
-    amount: number; dueDate: Date; status: string;
+    amount: number; dueDate: Date | null; status: string;
   }>) {
     return this.v.update({ where: { id }, data });
   }
 
   async updateStatus(id: string, status: string) {
     return this.v.update({ where: { id }, data: { status } });
+  }
+
+  async findUsageHistory() {
+    return (this.prisma as any).voucherUsage.findMany({
+      include: {
+        voucher: { select: { id: true, code: true, customerName: true, customerCpf: true } },
+        comanda: { select: { id: true, number: true, table: { select: { label: true } } } },
+      },
+      orderBy: { usedAt: 'desc' },
+    });
   }
 }

@@ -5,10 +5,12 @@ import { ComandaStatus } from '@prisma/client';
 import { uuidv7 } from 'uuidv7';
 
 const COMANDA_INCLUDE = {
-  table:    true,
-  user:     { select: { id: true, name: true } },
-  items:    { include: { menuItem: true } },
-  payments: true,
+  table:          true,
+  user:           { select: { id: true, name: true } },
+  closedByGarcom: { select: { id: true, code: true, name: true } },
+  discountReason: { select: { id: true, label: true } },
+  items:          { include: { menuItem: true } },
+  payments:       true,
 };
 
 @Injectable()
@@ -113,7 +115,7 @@ export class PrismaOrdersRepository implements OrdersRepositoryPort {
   }
 
   async cancelItemWithRecord(data: {
-    itemId: string; comandaId: string; reasonId: string; itemName: string;
+    itemId: string; comandaId: string; reasonId: string; garcomId: string; itemName: string;
     quantity: number; amount: number;
   }) {
     await this.prisma.$transaction([
@@ -122,6 +124,7 @@ export class PrismaOrdersRepository implements OrdersRepositoryPort {
           id:        uuidv7(),
           reasonId:  data.reasonId,
           comandaId: data.comandaId,
+          garcomId:  data.garcomId,
           itemName:  data.itemName,
           quantity:  data.quantity,
           amount:    data.amount,
@@ -148,15 +151,34 @@ export class PrismaOrdersRepository implements OrdersRepositoryPort {
     closureData: Record<string, any>;
     payments: Array<{ id: string; method: string; amount: number; notes?: string | null; cashSessionId?: string | null }>;
     voucherId?: string;
+    voucherDiscount?: number;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const txAny = tx as any;
       if (data.voucherId) {
-        const consumed = await txAny.voucher.updateMany({
-          where: { id: data.voucherId, status: 'PAID' },
-          data:  { status: 'USED', comandaId },
+        const voucher = await txAny.voucher.findUnique({ where: { id: data.voucherId } });
+        if (!voucher) throw new Error('Voucher não encontrado');
+
+        if (voucher.status === 'RECURRING') {
+          if (voucher.dueDate && new Date(voucher.dueDate) < new Date()) {
+            throw new Error('Voucher recorrente vencido');
+          }
+        } else {
+          const consumed = await txAny.voucher.updateMany({
+            where: { id: data.voucherId, status: 'PAID' },
+            data:  { status: 'USED', comandaId },
+          });
+          if (consumed.count === 0) throw new Error('Voucher não está mais disponível para uso');
+        }
+
+        await txAny.voucherUsage.create({
+          data: {
+            id:        uuidv7(),
+            voucherId: data.voucherId,
+            comandaId,
+            amount:    data.voucherDiscount ?? 0,
+          },
         });
-        if (consumed.count === 0) throw new Error('Voucher não está mais disponível para uso');
       }
 
       const closed = await tx.comanda.update({
@@ -179,6 +201,14 @@ export class PrismaOrdersRepository implements OrdersRepositoryPort {
 
   async findVoucherByCode(code: string) {
     return (this.prisma as any).voucher.findFirst({ where: { code } });
+  }
+
+  async findGarcomById(id: string) {
+    return (this.prisma as any).garcom.findUnique({ where: { id } });
+  }
+
+  async findDiscountReasonById(id: string) {
+    return this.prisma.discountReason.findUnique({ where: { id } });
   }
 
   async mergeComandas(targetId: string, sourceIds: string[], notes: string) {

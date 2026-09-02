@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { reasonsApi } from '@/services/api';
-import { BRAND, fmtBRL, Card, PageHeader, Btn, TableHead } from './shared';
+import { BRAND, fmtBRL, fmtDate, Card, PageHeader, Btn, TableHead } from './shared';
 
 export default function MotivosDesconto() {
   const [reasons, setReasons] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm]       = useState<{ label:string; type:'percent'|'fixed'; value:string } | null>(null);
   const [saving, setSaving]   = useState(false);
@@ -11,8 +12,10 @@ export default function MotivosDesconto() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setReasons(await reasonsApi.discount.list() as unknown as any[]); }
-    catch(e) {}
+    try {
+      const [r, h] = await Promise.all([reasonsApi.discount.list(), reasonsApi.discount.history()]);
+      setReasons(r as unknown as any[]); setHistory(h as unknown as any[]);
+    } catch(e) {}
     finally { setLoading(false); }
   }, []);
 
@@ -78,28 +81,66 @@ export default function MotivosDesconto() {
       )}
 
       {loading ? <p style={{ color:'#aaa', fontSize:13 }}>Carregando...</p> : (
-        <Card style={{ padding:0, overflow:'hidden' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-            <TableHead cols={['Motivo','Desconto Pré-definido']} />
-            <tbody>
-              {reasons.length === 0 && (
-                <tr><td colSpan={2} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>
-                  Nenhum motivo cadastrado
-                </td></tr>
-              )}
-              {reasons.map((r:any) => (
-                <tr key={r.id} style={{ borderBottom:'1px solid #f5f5f5' }}>
-                  <td style={{ padding:'12px 16px', fontWeight:700, color:BRAND.navy }}>{r.label}</td>
-                  <td style={{ padding:'12px 16px' }}>
-                    <span style={{ fontWeight:800, color:BRAND.green }}>
-                      {r.type === 'percent' ? `${r.value}%` : fmtBRL(r.value)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+        <>
+          <Card style={{ padding:0, overflow:'hidden', marginBottom:24 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <TableHead cols={['Motivo','Desconto Pré-definido']} />
+              <tbody>
+                {reasons.length === 0 && (
+                  <tr><td colSpan={2} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>
+                    Nenhum motivo cadastrado
+                  </td></tr>
+                )}
+                {reasons.map((r:any) => (
+                  <tr key={r.id} style={{ borderBottom:'1px solid #f5f5f5' }}>
+                    <td style={{ padding:'12px 16px', fontWeight:700, color:BRAND.navy }}>{r.label}</td>
+                    <td style={{ padding:'12px 16px' }}>
+                      <span style={{ fontWeight:800, color:BRAND.green }}>
+                        {r.type === 'percent' ? `${r.value}%` : fmtBRL(r.value)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+
+          <Card style={{ padding:0, overflow:'hidden' }}>
+            <div style={{ padding:'16px 20px', borderBottom:'1px solid #f0f0f0' }}>
+              <h3 style={{ margin:0, fontSize:15, fontWeight:800, color:BRAND.navy }}>Histórico de Descontos</h3>
+            </div>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <TableHead cols={['Data','Comanda','Desconto','Motivo','Garçom']} />
+              <tbody>
+                {history.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>
+                    Nenhum desconto registrado
+                  </td></tr>
+                )}
+                {history.map((h:any) => (
+                  <tr key={h.id} style={{ borderBottom:'1px solid #f0f0f0' }}>
+                    <td style={{ padding:'10px 16px', color:'#999' }}>{h.closedAt ? fmtDate(h.closedAt) : '—'}</td>
+                    <td style={{ padding:'10px 16px', fontWeight:600, color:BRAND.navy }}>
+                      #{h.number}{h.table ? ` · ${h.table.label}` : ''}
+                    </td>
+                    <td style={{ padding:'10px 16px', fontWeight:700, color:BRAND.red }}>
+                      {h.discountType === 'percent' ? `${h.discountValue}%` : fmtBRL(h.discountValue)}
+                    </td>
+                    <td style={{ padding:'10px 16px' }}>
+                      <span style={{ background:'#f0f2f5', borderRadius:4, padding:'3px 10px',
+                        fontSize:11, fontWeight:700, color:'#555' }}>
+                        {h.discountReason?.label ?? '—'}
+                      </span>
+                    </td>
+                    <td style={{ padding:'10px 16px', color:'#666' }}>
+                      {h.closedByGarcom ? `${h.closedByGarcom.name} (${h.closedByGarcom.code})` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </>
       )}
     </div>
   );

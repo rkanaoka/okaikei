@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SyncModule } from '@/modules/sync/sync.module';
+import { AuthModule } from '@/modules/auth/auth.module';
 
 // Domain — Repository Ports (tokens)
 import { MENU_REPOSITORY_PORT }           from './domain/repositories/menu-repository.port';
@@ -11,6 +12,7 @@ import { VOUCHER_REPOSITORY_PORT }        from './domain/repositories/voucher-re
 import { PRINTER_REPOSITORY_PORT }        from './domain/repositories/printer-repository.port';
 import { PRINT_TEMPLATE_REPOSITORY_PORT } from './domain/repositories/print-template-repository.port';
 import { REASONS_REPOSITORY_PORT }        from './domain/repositories/reasons-repository.port';
+import { GARCOM_REPOSITORY_PORT }         from './domain/repositories/garcom-repository.port';
 
 // Application — Contracts (tokens)
 import { COMANDA_EVENT_PUBLISHER_PORT }   from './application/contracts/comanda-event-publisher.port';
@@ -26,6 +28,7 @@ import { VouchersService }       from './application/use-cases/vouchers.service'
 import { PrintingService }       from './application/use-cases/printing.service';
 import { PrintTemplatesService } from './application/use-cases/print-templates.service';
 import { ReasonsService }        from './application/use-cases/reasons.service';
+import { GarconsService }        from './application/use-cases/garcons.service';
 
 // Infrastructure — Repository Adapters
 import { PrismaMenuRepository }          from './infrastructure/repositories/prisma-menu.repository';
@@ -37,6 +40,7 @@ import { PrismaVoucherRepository }       from './infrastructure/repositories/pri
 import { PrismaPrinterRepository }       from './infrastructure/repositories/prisma-printer.repository';
 import { PrismaPrintTemplateRepository } from './infrastructure/repositories/prisma-print-template.repository';
 import { PrismaReasonsRepository }       from './infrastructure/repositories/prisma-reasons.repository';
+import { PrismaGarcomRepository }        from './infrastructure/repositories/prisma-garcom.repository';
 
 // Infrastructure — Publishers & API Clients
 import { NatsComandaPublisher } from './infrastructure/publishers/nats-comanda.publisher';
@@ -52,9 +56,10 @@ import { VouchersController }      from '@/runtimes/api/controllers/vouchers.con
 import { PrintingController }      from '@/runtimes/api/controllers/printing.controller';
 import { PrintTemplatesController } from '@/runtimes/api/controllers/print-templates.controller';
 import { ReasonsController }       from '@/runtimes/api/controllers/reasons.controller';
+import { GarconsController }       from '@/runtimes/api/controllers/garcons.controller';
 
 @Module({
-  imports: [SyncModule],
+  imports: [SyncModule, AuthModule],
   controllers: [
     MenuController,
     OptionGroupsController,
@@ -65,6 +70,7 @@ import { ReasonsController }       from '@/runtimes/api/controllers/reasons.cont
     PrintingController,
     PrintTemplatesController,
     ReasonsController,
+    GarconsController,
   ],
   providers: [
     // Services
@@ -77,6 +83,7 @@ import { ReasonsController }       from '@/runtimes/api/controllers/reasons.cont
     PrintingService,
     PrintTemplatesService,
     ReasonsService,
+    GarconsService,
 
     // Repository Port → Adapter bindings
     { provide: MENU_REPOSITORY_PORT,           useClass: PrismaMenuRepository },
@@ -88,6 +95,7 @@ import { ReasonsController }       from '@/runtimes/api/controllers/reasons.cont
     { provide: PRINTER_REPOSITORY_PORT,        useClass: PrismaPrinterRepository },
     { provide: PRINT_TEMPLATE_REPOSITORY_PORT, useClass: PrismaPrintTemplateRepository },
     { provide: REASONS_REPOSITORY_PORT,        useClass: PrismaReasonsRepository },
+    { provide: GARCOM_REPOSITORY_PORT,         useClass: PrismaGarcomRepository },
 
     // Publisher and API Client Port → Adapter bindings
     { provide: COMANDA_EVENT_PUBLISHER_PORT,   useClass: NatsComandaPublisher },
@@ -103,6 +111,7 @@ import { ReasonsController }       from '@/runtimes/api/controllers/reasons.cont
     PrintingService,
     PrintTemplatesService,
     ReasonsService,
+    GarconsService,
   ],
 })
 export class PontoDeVendaModule {}
