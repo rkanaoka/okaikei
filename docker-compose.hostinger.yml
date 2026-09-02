@@ -73,10 +73,15 @@ services:
     labels:
       - "traefik.enable=true"
       # Rota pública: /api/* → vps-api (prioridade alta)
+      # Esse container define 2 services Traefik (okaikei-api e okaikei-internal) — sem
+      # o label ".service=" explícito abaixo, o Traefik não sabe linkar o router ao
+      # service certo e descarta os dois silenciosamente (erro "cannot be linked
+      # automatically with multiple Services").
       - "traefik.http.routers.okaikei-api.rule=Host(`${CARDAPIO_DOMAIN:-cardapio.bodogami.tech}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.okaikei-api.entrypoints=websecure"
       - "traefik.http.routers.okaikei-api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.okaikei-api.priority=10"
+      - "traefik.http.routers.okaikei-api.service=okaikei-api"
       - "traefik.http.services.okaikei-api.loadbalancer.server.port=4000"
       # Rota interna: /internal/* → vps-api (restrito ao IP WireGuard)
       - "traefik.http.routers.okaikei-internal.rule=Host(`${CARDAPIO_DOMAIN:-cardapio.bodogami.tech}`) && PathPrefix(`/internal`)"
@@ -84,11 +89,15 @@ services:
       - "traefik.http.routers.okaikei-internal.tls.certresolver=letsencrypt"
       - "traefik.http.routers.okaikei-internal.priority=20"
       - "traefik.http.routers.okaikei-internal.middlewares=vpn-only@docker"
+      - "traefik.http.routers.okaikei-internal.service=okaikei-internal"
       - "traefik.http.services.okaikei-internal.loadbalancer.server.port=4000"
       # Middleware: libera /internal apenas para IPs WireGuard
       - "traefik.http.middlewares.vpn-only.ipwhitelist.sourcerange=${WIREGUARD_CIDR:-10.0.0.0/8}"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      # 127.0.0.1, não "localhost" — em Alpine/musl "localhost" pode resolver pra
+      # ::1 (IPv6), que o Node não escuta, fazendo o healthcheck falhar mesmo com
+      # o servidor no ar (e por consequência o Traefik nunca roteia pra esse container).
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
       interval: 20s
       timeout: 5s
       retries: 3
