@@ -15,7 +15,14 @@ export const pedidosApi = {
     tableNumber: string;
     items: { menuItemId: string; quantity: number; notes?: string }[];
   }): Promise<Comanda> {
-    return http.post<Comanda>('/pedidos', d).then((r) => r.data);
+    // A API (vps-api/backend) espera "qty", não "quantity" — só a camada de API
+    // traduz; o resto do app usa "quantity" internamente.
+    const payload = {
+      customerName: d.customerName,
+      tableNumber: d.tableNumber,
+      items: d.items.map((i) => ({ menuItemId: i.menuItemId, qty: i.quantity, notes: i.notes })),
+    };
+    return http.post<Comanda>('/pedidos', payload).then((r) => r.data);
   },
 
   get(token: string): Promise<Comanda> {
@@ -25,7 +32,7 @@ export const pedidosApi = {
   addItems(token: string, items: CartItem[]): Promise<Comanda> {
     const payload = items.map((i) => ({
       menuItemId: i.menuItemId,
-      quantity: i.quantity,
+      qty: i.quantity,
       notes: i.notes,
     }));
     return http.post<Comanda>(`/pedidos/${token}/items`, { items: payload }).then((r) => r.data);
