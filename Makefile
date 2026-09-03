@@ -11,7 +11,10 @@
 
 # -p isola este stack do docker-compose.prod.yml (ver Makefile.prod), que roda
 # em paralelo no mesmo host sob o projeto "bodogami-prod".
-COMPOSE  = docker compose -p bodogami-dev
+# --env-file é obrigatório: sem ele o Compose cai no ".env" da raiz (produção)
+# em vez do ".env.development", substituindo ${VAR} do docker-compose.yml com
+# as credenciais erradas (ex: Redis com a senha de prod).
+COMPOSE  = docker compose -p bodogami-dev --env-file .env.development
 BACKEND  = $(COMPOSE) exec backend
 DB_SVC   = $(COMPOSE) exec postgres
 

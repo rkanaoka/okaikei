@@ -42,12 +42,17 @@ export class CardapioDigitalService {
 
   async createPedido(dto: {
     customerName: string;
-    tableNumber: string;
+    tableId?: string;
+    tableNumber?: string;
     items: Array<{ menuItemId: string; qty: number; notes?: string }>;
   }) {
-    const table = await this.prisma.table.findFirst({
-      where: { number: Number(dto.tableNumber) },
-    });
+    // tableId vem do QR Code (identifica mesa/balcão/mesa externa sem ambiguidade).
+    // tableNumber é o fallback manual legado — assume tipo "MESA".
+    const table = dto.tableId
+      ? await this.prisma.table.findUnique({ where: { id: dto.tableId } })
+      : dto.tableNumber
+        ? await this.prisma.table.findFirst({ where: { type: 'MESA' as any, number: Number(dto.tableNumber) } })
+        : null;
 
     // Validate items and snapshot prices
     const enrichedItems: Array<{
@@ -78,7 +83,7 @@ export class CardapioDigitalService {
         id: comandaId,
         tableId: table?.id ?? null,
         customerName: dto.customerName ?? null,
-        notes: !table ? `Mesa: ${dto.tableNumber}` : null,
+        notes: !table ? `Mesa: ${dto.tableNumber ?? dto.tableId ?? '?'}` : null,
       },
     });
 
@@ -164,6 +169,7 @@ export class CardapioDigitalService {
 
   private mapComandaToResponse(comanda: any) {
     const tableNumber =
+      comanda.table?.label ??
       comanda.table?.number?.toString() ??
       (comanda.notes?.startsWith('Mesa: ')
         ? comanda.notes.replace('Mesa: ', '')

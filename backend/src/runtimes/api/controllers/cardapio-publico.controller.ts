@@ -21,7 +21,8 @@ export class CardapioPublicoController {
   createPedido(
     @Body() body: {
       customerName: string;
-      tableNumber: string;
+      tableId?: string;
+      tableNumber?: string;
       items: Array<{ menuItemId: string; qty: number; notes?: string }>;
     },
   ) {

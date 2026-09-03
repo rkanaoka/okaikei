@@ -5,6 +5,7 @@ import { pedidosApi } from '../lib/api';
 import type { Category, MenuItem } from '../lib/types';
 import { addToCart, getCart, clearCart, cartCount } from '../lib/cart';
 import { getSession, setSession } from '../lib/session';
+import { getQrTable } from '../lib/qrTable';
 import ProdutoCard from '../components/ProdutoCard';
 import CartDrawer from '../components/CartDrawer';
 import IdentModal from '../components/IdentModal';
@@ -26,6 +27,7 @@ export default function MenuPage() {
 
   const cartItems = getCart();
   const count = cartCount(cartItems);
+  const qrTable = getQrTable();
 
   const bumpCart = useCallback(() => setCartVersion((v) => v + 1), []);
 
@@ -54,8 +56,10 @@ export default function MenuPage() {
       quantity: c.quantity,
       notes: c.notes,
     }));
-    const comanda = await pedidosApi.create({ customerName, tableNumber, items: payload });
-    setSession({ token: comanda.token, customerName, tableNumber });
+    const comanda = qrTable
+      ? await pedidosApi.create({ customerName, tableId: qrTable.tableId, items: payload })
+      : await pedidosApi.create({ customerName, tableNumber, items: payload });
+    setSession({ token: comanda.token, customerName, tableNumber: qrTable?.label ?? tableNumber });
     clearCart();
     bumpCart();
     setIdentModalOpen(false);
@@ -267,6 +271,7 @@ export default function MenuPage() {
         open={identModalOpen}
         onClose={() => setIdentModalOpen(false)}
         onConfirm={handleConfirmOrder}
+        qrTable={qrTable}
       />
     </div>
   );

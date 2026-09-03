@@ -28,6 +28,7 @@ function handleBackendError(err: unknown, reply: FastifyReply, context: string):
 
 interface CreatePedidoRequestBody {
   customerName?: unknown;
+  tableId?: unknown;
   tableNumber?: unknown;
   items?: unknown;
 }
@@ -45,13 +46,15 @@ export async function pedidosRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/api/pedidos',
     async (req: FastifyRequest<{ Body: CreatePedidoRequestBody }>, reply: FastifyReply) => {
-      const { customerName, tableNumber, items } = req.body ?? {};
+      const { customerName, tableId, tableNumber, items } = req.body ?? {};
 
       if (!customerName || typeof customerName !== 'string' || customerName.trim() === '') {
         return reply.status(422).send({ error: 'Validation error', message: '`customerName` é obrigatório.' });
       }
-      if (tableNumber === undefined || tableNumber === null || tableNumber === '') {
-        return reply.status(422).send({ error: 'Validation error', message: '`tableNumber` é obrigatório.' });
+      const hasTableId     = typeof tableId === 'string' && tableId.trim() !== '';
+      const hasTableNumber = tableNumber !== undefined && tableNumber !== null && tableNumber !== '';
+      if (!hasTableId && !hasTableNumber) {
+        return reply.status(422).send({ error: 'Validation error', message: '`tableId` ou `tableNumber` é obrigatório.' });
       }
       if (!Array.isArray(items) || items.length === 0) {
         return reply.status(422).send({ error: 'Validation error', message: '`items` deve ser um array não vazio.' });

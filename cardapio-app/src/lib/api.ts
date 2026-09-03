@@ -12,14 +12,18 @@ export const menuApi = {
 export const pedidosApi = {
   create(d: {
     customerName: string;
-    tableNumber: string;
+    // tableId (mesa identificada via QR Code) tem prioridade sobre tableNumber
+    // (entrada manual, legado — assume tipo "Mesa").
+    tableId?: string;
+    tableNumber?: string;
     items: { menuItemId: string; quantity: number; notes?: string }[];
   }): Promise<Comanda> {
     // A API (vps-api/backend) espera "qty", não "quantity" — só a camada de API
     // traduz; o resto do app usa "quantity" internamente.
     const payload = {
       customerName: d.customerName,
-      tableNumber: d.tableNumber,
+      tableId: d.tableId,
+      tableNumber: d.tableId ? undefined : d.tableNumber,
       items: d.items.map((i) => ({ menuItemId: i.menuItemId, qty: i.quantity, notes: i.notes })),
     };
     return http.post<Comanda>('/pedidos', payload).then((r) => r.data);

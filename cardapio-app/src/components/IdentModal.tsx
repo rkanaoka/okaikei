@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import type { QrTable } from '../lib/qrTable';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onConfirm: (customerName: string, tableNumber: string) => Promise<void>;
+  qrTable?: QrTable | null;
 }
 
-export default function IdentModal({ open, onClose, onConfirm }: Props) {
+export default function IdentModal({ open, onClose, onConfirm, qrTable }: Props) {
   const [customerName, setCustomerName] = useState('');
   const [tableNumber, setTableNumber] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,12 +30,14 @@ export default function IdentModal({ open, onClose, onConfirm }: Props) {
       setError('Por favor, informe seu nome.');
       return;
     }
-    if (!tableNumber.trim() || isNaN(Number(tableNumber))) {
+    if (!qrTable && (!tableNumber.trim() || isNaN(Number(tableNumber)))) {
       setError('Por favor, informe um número de mesa válido.');
       return;
     }
     setLoading(true);
     try {
+      // Mesa já identificada pelo QR Code — o valor real (tableId) é resolvido
+      // por App.tsx a partir da sessão; aqui só confirmamos o nome.
       await onConfirm(customerName.trim(), tableNumber.trim());
     } catch (err: unknown) {
       const msg =
@@ -155,22 +159,32 @@ export default function IdentModal({ open, onClose, onConfirm }: Props) {
             />
           </div>
 
-          <div>
-            <label style={labelStyle} htmlFor="tableNumber">
-              Número da mesa
-            </label>
-            <input
-              id="tableNumber"
-              style={inputStyle}
-              type="number"
-              inputMode="numeric"
-              placeholder="Ex: 5"
-              value={tableNumber}
-              onChange={(e) => setTableNumber(e.target.value)}
-              disabled={loading}
-              min="1"
-            />
-          </div>
+          {qrTable ? (
+            <div>
+              <label style={labelStyle}>Mesa</label>
+              <div style={{ ...inputStyle, display: 'flex', alignItems: 'center', gap: 8, background: '#f0f7ff', borderColor: '#0D1B2A' }}>
+                <span>✓</span>
+                <span style={{ fontWeight: 700 }}>{qrTable.label || 'Identificada pelo QR Code'}</span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label style={labelStyle} htmlFor="tableNumber">
+                Número da mesa
+              </label>
+              <input
+                id="tableNumber"
+                style={inputStyle}
+                type="number"
+                inputMode="numeric"
+                placeholder="Ex: 5"
+                value={tableNumber}
+                onChange={(e) => setTableNumber(e.target.value)}
+                disabled={loading}
+                min="1"
+              />
+            </div>
+          )}
 
           {error && <div style={errorStyle}>{error}</div>}
 

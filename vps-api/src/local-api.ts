@@ -24,7 +24,8 @@ export interface PedidoItem {
 
 export interface CreatePedidoBody {
   customerName: string;
-  tableNumber: number | string;
+  tableId?: string;
+  tableNumber?: number | string;
   items: PedidoItem[];
 }
 

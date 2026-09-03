@@ -72,7 +72,10 @@ export const optionGroupsApi = {
 
 // ── Tables ────────────────────────────────────────────────────────────────────
 export const tablesApi = {
-  list: () => http.get('/tables'),
+  list:   () => http.get('/tables'),
+  create: (d: { type: 'MESA'|'BALCAO'|'MESA_EXTERNA'; number: number; capacity?: number }) => http.post('/tables', d),
+  update: (id: string, d: Partial<{ type: 'MESA'|'BALCAO'|'MESA_EXTERNA'; number: number; capacity: number }>) =>
+    http.put(`/tables/${id}`, d),
 };
 
 // ── Comandas / Orders ─────────────────────────────────────────────────────────

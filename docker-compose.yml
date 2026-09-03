@@ -99,7 +99,10 @@ services:
       - ./backend:/app
       - /app/node_modules
     ports:
-      - "3001:3001"
+      # 3011, não 3001 — a 3001 agora é publicada por bodogami_prod_backend em
+      # 127.0.0.1 (necessário pro encaminhamento WireGuard); os dois stacks
+      # (dev e prod) podem rodar em paralelo no mesmo host.
+      - "3011:3001"
     networks:
       - bodogami
     depends_on:

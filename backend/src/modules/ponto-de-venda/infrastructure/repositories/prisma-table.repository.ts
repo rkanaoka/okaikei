@@ -9,7 +9,7 @@ export class PrismaTableRepository implements TableRepositoryPort {
   async findAll() {
     return this.prisma.table.findMany({
       include: { comandas: { where: { status: { in: ['OPEN', 'PREPARING'] } } } },
-      orderBy: { number: 'asc' },
+      orderBy: [{ type: 'asc' }, { number: 'asc' }],
     });
   }
 
@@ -17,11 +17,15 @@ export class PrismaTableRepository implements TableRepositoryPort {
     return this.prisma.table.findUnique({ where: { id } });
   }
 
-  async create(data: { id: string; number: number; label: string; capacity?: number }) {
-    return this.prisma.table.create({ data });
+  async findByTypeAndNumber(type: string, number: number) {
+    return (this.prisma.table as any).findUnique({ where: { type_number: { type, number } } });
   }
 
-  async update(id: string, data: Partial<{ number: number; label: string; capacity: number; status: string }>) {
+  async create(data: { id: string; type: string; number: number; label: string; capacity?: number }) {
+    return this.prisma.table.create({ data: data as any });
+  }
+
+  async update(id: string, data: Partial<{ type: string; number: number; label: string; capacity: number; status: string }>) {
     return this.prisma.table.update({ where: { id }, data: data as any });
   }
 

@@ -6,6 +6,7 @@ import CartDrawer from './components/CartDrawer';
 import { getSession, setSession, clearSession } from './lib/session';
 import { getCart, clearCart, cartCount } from './lib/cart';
 import { pedidosApi } from './lib/api';
+import { captureQrTableFromUrl, getQrTable } from './lib/qrTable';
 import IdentModal from './components/IdentModal';
 
 function BottomBar({
@@ -133,9 +134,14 @@ export default function App() {
 
   const bumpCart = useCallback(() => setCartVersion((v) => v + 1), []);
 
+  // Síncrono (não em useEffect) — precisa terminar antes do MenuPage renderizar
+  // e ler a sessão, já que os efeitos dos filhos disparam antes dos do pai.
+  captureQrTableFromUrl();
+
   const session = getSession();
   const cartItems = getCart();
   const count = cartCount(cartItems);
+  const qrTable = getQrTable();
 
   async function handleConfirmOrder(customerName: string, tableNumber: string) {
     const cart = getCart();
@@ -144,8 +150,10 @@ export default function App() {
       quantity: c.quantity,
       notes: c.notes,
     }));
-    const comanda = await pedidosApi.create({ customerName, tableNumber, items: payload });
-    setSession({ token: comanda.token, customerName, tableNumber });
+    const comanda = qrTable
+      ? await pedidosApi.create({ customerName, tableId: qrTable.tableId, items: payload })
+      : await pedidosApi.create({ customerName, tableNumber, items: payload });
+    setSession({ token: comanda.token, customerName, tableNumber: qrTable?.label ?? tableNumber });
     clearCart();
     bumpCart();
     setIdentModalOpen(false);
@@ -193,6 +201,7 @@ export default function App() {
         open={identModalOpen}
         onClose={() => setIdentModalOpen(false)}
         onConfirm={handleConfirmOrder}
+        qrTable={qrTable}
       />
     </>
   );

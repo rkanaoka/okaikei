@@ -133,8 +133,9 @@ model MenuOption {
 // ─── Mesas ────────────────────────────────────────────────────────────────────
 model Table {
   id        String      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  number    Int         @unique
-  label     String      @db.VarChar(50)   // ex: "Mesa 5", "Balcão"
+  type      TableType   @default(MESA)
+  number    Int
+  label     String      @db.VarChar(50)   // gerado a partir de type+number, ex: "Mesa 5", "Balcão 3", "Mesa Externa 12"
   capacity  Int         @default(4)
   status    TableStatus @default(FREE)
   createdAt DateTime    @default(now()) @map("created_at")
@@ -142,7 +143,16 @@ model Table {
 
   comandas Comanda[]
 
+  // number sozinho não é mais globalmente único — mesa/balcão/externa podem
+  // compartilhar o mesmo número, o par (type, number) que precisa ser único
+  @@unique([type, number])
   @@map("tables")
+}
+
+enum TableType {
+  MESA
+  BALCAO
+  MESA_EXTERNA
 }
 
 enum TableStatus {
