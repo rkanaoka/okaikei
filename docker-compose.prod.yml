@@ -3,10 +3,14 @@
 #
 # Diferenças em relação ao docker-compose.yml de desenvolvimento:
 #   - builds usam target: production (sem hot-reload, sem código-fonte montado)
-#   - Postgres/Redis/NATS não publicam portas no host — só acessíveis pela rede
-#     interna do Docker; use `docker compose exec` para acesso administrativo
+#   - Redis/NATS não publicam portas no host — só acessíveis pela rede interna
+#     do Docker; use `docker compose exec` para acesso administrativo
 #   - senhas/tokens vêm de .env sem fallback fraco (falha se não estiverem setados)
 #   - nginx serve o build estático do frontend, não o servidor de dev do Vite
+#
+# Banco de dados: só o externo (10.5.103.73, ver DATABASE_URL em .env). O
+# Postgres interno foi descomissionado em 2026-09-02 após a migração completa
+# dos dados — não faz mais parte deste stack.
 # ─────────────────────────────────────────────────────────────────────────────
 
 networks:
@@ -14,30 +18,11 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_prod_data:
   redis_prod_data:
   nats_prod_data:
   backup_prod_data:
 
 services:
-
-  # ── PostgreSQL ───────────────────────────────────────────────────────────────
-  postgres:
-    image: "postgres:16.0-alpine3.18"
-    env_file:
-      - .env
-    container_name: bodogami_prod_postgres
-    restart: unless-stopped
-    volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-    networks:
-      - bodogami_prod
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # ── Redis ────────────────────────────────────────────────────────────────────
   redis:
@@ -104,9 +89,8 @@ services:
     networks:
       - bodogami_prod
     depends_on:
-      postgres: { condition: service_healthy }
-      redis:    { condition: service_healthy }
-      nats:     { condition: service_started }
+      redis: { condition: service_healthy }
+      nats:  { condition: service_started }
     # migrate deploy é idempotente e nunca aplica mudança destrutiva sem migration
     # explícita — seguro rodar a cada start. Requer migrations já commitadas em
     # backend/prisma/migrations (ver aviso de segurança separado).
@@ -133,14 +117,19 @@ services:
       - backend
 
   # ── Backup Worker ─────────────────────────────────────────────────────────────
+  # Faz backup do banco EXTERNO (10.5.103.73) — o Postgres interno foi
+  # descomissionado, não roda mais nesse stack.
+  # Imagem precisa ser >= versão do servidor externo (hoje 18.x) — pg_dump
+  # recusa conectar num servidor com versão maior que a sua própria.
   backup:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: bodogami_prod_backup
     restart: unless-stopped
     environment:
-      PGPASSWORD:    ${POSTGRES_PASSWORD}
-      POSTGRES_HOST: postgres
-      POSTGRES_USER: ${POSTGRES_USER}
+      # DATABASE_URL (não host/user/senha separados): a senha em .env vem
+      # URL-encoded (ex: "%40" pra "@"), e só uma URI de conexão de verdade é
+      # decodificada certo pelo libpq — ver comentário em scripts/backup.sh.
+      DATABASE_URL:  ${DATABASE_URL}
       POSTGRES_DB:   ${POSTGRES_DB}
       CLOUD_BACKUP_URL: ${CLOUD_BACKUP_URL:-}
       CLOUD_API_KEY:    ${CLOUD_API_KEY:-}
@@ -149,8 +138,6 @@ services:
       - ./scripts/backup.sh:/backup.sh:ro
     networks:
       - bodogami_prod
-    depends_on:
-      postgres: { condition: service_healthy }
     entrypoint: ["sh", "-c", "echo 'Backup container pronto. Rode: make -f Makefile.prod backup' && sleep infinity"]
 
   # ── Nginx (proxy reverso) ─────────────────────────────────────────────────────

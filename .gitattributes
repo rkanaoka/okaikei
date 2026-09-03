@@ -1,0 +1,4 @@
+# Scripts rodam dentro de containers Linux — CRLF (comum em checkout no Windows)
+# quebra o shebang e o script nem executa. Força LF pra esses arquivos.
+*.sh text eol=lf
+Dockerfile text eol=lf

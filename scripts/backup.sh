@@ -1,15 +1,17 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # ─────────────────────────────────────────────────────────────────────────────
 # Bodogami — pg_dump backup script
-# Runs inside the 'backup' Docker service (or standalone via cron).
+# Runs inside o serviço Docker 'backup' (imagem postgres:16-alpine — sem bash,
+# por isso #!/bin/sh puro e sem "pipefail"/"[[ ]]").
 # ─────────────────────────────────────────────────────────────────────────────
-set -euo pipefail
+set -eu
 
 # ── Config ────────────────────────────────────────────────────────────────────
-DB_HOST="${POSTGRES_HOST:-postgres}"
-DB_PORT="${POSTGRES_PORT:-5432}"
-DB_USER="${POSTGRES_USER:-bodogami}"
-DB_PASS="${POSTGRES_PASSWORD:-secret}"
+# Usa DATABASE_URL (URI completa) em vez de montar host/user/senha na mão: a
+# senha em POSTGRES_PASSWORD vem URL-encoded (ex: "%40" pra "@"), e PGPASSWORD
+# não decodifica isso — só uma URI de conexão de verdade é decodificada certo
+# pelo libpq. DB_NAME só é usado pro nome do arquivo, não pra conectar.
+DB_URI="${DATABASE_URL:?DATABASE_URL precisa estar definida em .env}"
 DB_NAME="${POSTGRES_DB:-bodogami}"
 
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
@@ -28,29 +30,30 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 mkdir -p "$BACKUP_DIR"
 
 # ── Wait for Postgres ─────────────────────────────────────────────────────────
-log "Waiting for PostgreSQL at ${DB_HOST}:${DB_PORT}…"
-until PGPASSWORD="$DB_PASS" pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -q; do
+log "Waiting for PostgreSQL (${DB_NAME})…"
+until pg_isready -d "$DB_URI" -q; do
   sleep 2
 done
 log "PostgreSQL ready."
 
 # ── Dump ─────────────────────────────────────────────────────────────────────
+# Sem pipe direto pro gzip (evita mascarar falha do pg_dump — sem "pipefail"
+# disponível em /bin/sh, um pg_dump que falha no meio não derrubaria o gzip).
 log "Starting backup → ${FILENAME}"
-PGPASSWORD="$DB_PASS" pg_dump \
-  -h "$DB_HOST" \
-  -p "$DB_PORT" \
-  -U "$DB_USER" \
-  -d "$DB_NAME" \
+DUMP_TMP="${BACKUP_DIR}/${DB_NAME}_${TIMESTAMP}.sql"
+pg_dump \
+  -d "$DB_URI" \
   --no-owner \
   --no-acl \
   --format=plain \
-  | gzip > "$FILENAME"
+  -f "$DUMP_TMP"
+gzip "$DUMP_TMP"
 
 SIZE=$(du -sh "$FILENAME" | cut -f1)
 log "Backup complete. Size: ${SIZE}"
 
 # ── Cloud upload ──────────────────────────────────────────────────────────────
-if [[ -n "$CLOUD_BACKUP_URL" && -n "$CLOUD_API_KEY" ]]; then
+if [ -n "$CLOUD_BACKUP_URL" ] && [ -n "$CLOUD_API_KEY" ]; then
   log "Uploading to cloud…"
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST "$CLOUD_BACKUP_URL/upload" \
@@ -59,7 +62,7 @@ if [[ -n "$CLOUD_BACKUP_URL" && -n "$CLOUD_API_KEY" ]]; then
     -F "database=${DB_NAME}" \
     -F "timestamp=${TIMESTAMP}" \
     --max-time 120 || echo "000")
-  if [[ "$STATUS" == "200" || "$STATUS" == "201" ]]; then
+  if [ "$STATUS" = "200" ] || [ "$STATUS" = "201" ]; then
     log "Cloud upload OK (HTTP ${STATUS})."
   else
     log "WARNING: Cloud upload failed (HTTP ${STATUS}). Local backup retained."
