@@ -47,8 +47,9 @@ async function bootstrap() {
   // Private internal routes — no rate limiting
   await app.register(internalRoutes);
 
-  // Health check
-  app.get('/health', async (_req, reply) => {
+  // Health check — logLevel: 'silent' evita logar a cada ping do Docker
+  // (interval: 20s), que é só verificação de infra, não tráfego real.
+  app.get('/health', { logLevel: 'silent' }, async (_req, reply) => {
     return reply.send({ status: 'ok', ts: new Date().toISOString() });
   });
 
