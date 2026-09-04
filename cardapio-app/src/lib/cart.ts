@@ -15,28 +15,37 @@ export function setCart(items: CartItem[]): void {
   localStorage.setItem(KEY, JSON.stringify(items));
 }
 
-export function addToCart(item: CartItem): void {
+function genId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+// Duas linhas são "o mesmo item" (e somam quantidade) apenas se tiverem as
+// mesmas observações/customizações — do contrário, itens iguais mas com
+// seleções de opções diferentes viram linhas distintas no carrinho.
+export function addToCart(item: Omit<CartItem, 'id'>): void {
   const cart = getCart();
-  const existing = cart.find((c) => c.menuItemId === item.menuItemId);
+  const existing = cart.find(
+    (c) => c.menuItemId === item.menuItemId && (c.notes || '') === (item.notes || '')
+  );
   if (existing) {
     existing.quantity += item.quantity;
   } else {
-    cart.push({ ...item });
+    cart.push({ ...item, id: genId() });
   }
   setCart(cart);
 }
 
-export function removeFromCart(menuItemId: string): void {
-  setCart(getCart().filter((c) => c.menuItemId !== menuItemId));
+export function removeFromCart(id: string): void {
+  setCart(getCart().filter((c) => c.id !== id));
 }
 
-export function updateQty(menuItemId: string, qty: number): void {
+export function updateQty(id: string, qty: number): void {
   if (qty <= 0) {
-    removeFromCart(menuItemId);
+    removeFromCart(id);
     return;
   }
   const cart = getCart();
-  const item = cart.find((c) => c.menuItemId === menuItemId);
+  const item = cart.find((c) => c.id === id);
   if (item) {
     item.quantity = qty;
     setCart(cart);

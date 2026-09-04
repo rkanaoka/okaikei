@@ -23,7 +23,7 @@ export class CardapioPublicoController {
       customerName: string;
       tableId?: string;
       tableNumber?: string;
-      items: Array<{ menuItemId: string; qty: number; notes?: string }>;
+      items: Array<{ menuItemId: string; qty: number; notes?: string; selectedOptionIds?: string[] }>;
     },
   ) {
     return this.service.createPedido(body);
@@ -40,7 +40,7 @@ export class CardapioPublicoController {
   @HttpCode(201)
   addItems(
     @Param('token') token: string,
-    @Body() body: { items: Array<{ menuItemId: string; qty: number; notes?: string }> },
+    @Body() body: { items: Array<{ menuItemId: string; qty: number; notes?: string; selectedOptionIds?: string[] }> },
   ) {
     return this.service.addItems(token, body);
   }

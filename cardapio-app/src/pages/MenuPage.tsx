@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { menuApi } from '../lib/api';
 import { pedidosApi } from '../lib/api';
@@ -9,6 +9,7 @@ import { getQrTable } from '../lib/qrTable';
 import ProdutoCard from '../components/ProdutoCard';
 import CartDrawer from '../components/CartDrawer';
 import IdentModal from '../components/IdentModal';
+import ItemDetailModal from '../components/ItemDetailModal';
 
 function formatPrice(value: number): string {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -24,12 +25,25 @@ export default function MenuPage() {
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [identModalOpen, setIdentModalOpen] = useState(false);
   const [cartVersion, setCartVersion] = useState(0);
+  const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
 
   const cartItems = getCart();
   const count = cartCount(cartItems);
   const qrTable = getQrTable();
 
   const bumpCart = useCallback(() => setCartVersion((v) => v + 1), []);
+
+  // Refs para medir a altura do cabeçalho fixo (header + abas) e para
+  // localizar cada seção/aba durante a rolagem (scroll-spy).
+  const headerRef = useRef<HTMLDivElement>(null);
+  const tabsWrapRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const isProgrammaticScroll = useRef(false);
+  const programmaticScrollTimeout = useRef<number>();
+
+  const [headerHeight, setHeaderHeight] = useState(72);
+  const [stickyOffset, setStickyOffset] = useState(114);
 
   useEffect(() => {
     menuApi
@@ -38,15 +52,109 @@ export default function MenuPage() {
         const sorted = [...cats].sort((a, b) => a.sortOrder - b.sortOrder);
         setCategories(sorted);
         setItems(its);
-        if (sorted.length > 0) setActiveCategory(sorted[0].id);
+        const firstWithItems = sorted.find((c) =>
+          its.some((i) => i.categoryId === c.id || i.category === c.id)
+        );
+        setActiveCategory(firstWithItems?.id ?? sorted[0]?.id ?? '');
       })
       .catch(() => setError('Não foi possível carregar o cardápio. Verifique sua conexão.'))
       .finally(() => setLoading(false));
   }, []);
 
+  // Todas as categorias com pelo menos 1 item, na ordem de exibição —
+  // fonte única tanto para as seções da rolagem quanto para as abas.
+  const categoriesWithItems = useMemo(
+    () =>
+      categories
+        .map((cat) => ({
+          cat,
+          items: items
+            .filter((i) => i.categoryId === cat.id || i.category === cat.id)
+            .sort((a, b) => a.sortOrder - b.sortOrder),
+        }))
+        .filter((g) => g.items.length > 0),
+    [categories, items]
+  );
+
+  // Mede a altura real do header + abas (fixos no topo) para saber onde
+  // a "linha de corte" da rolagem fica, tanto pro scroll-spy quanto pro
+  // scroll-margin-top das seções.
+  useEffect(() => {
+    function measure() {
+      const h = headerRef.current?.getBoundingClientRect().height ?? 0;
+      const t = tabsWrapRef.current?.getBoundingClientRect().height ?? 0;
+      setHeaderHeight(h);
+      setStickyOffset(h + t);
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [categoriesWithItems.length]);
+
+  // Scroll-spy: conforme o usuário rola, a categoria "ativa" passa a ser a
+  // última seção cujo topo já cruzou a linha logo abaixo do header fixo.
+  useEffect(() => {
+    if (categoriesWithItems.length === 0) return;
+    let ticking = false;
+
+    function computeActive() {
+      ticking = false;
+      if (isProgrammaticScroll.current) return;
+      let current = categoriesWithItems[0].cat.id;
+      for (const { cat } of categoriesWithItems) {
+        const el = sectionRefs.current.get(cat.id);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - stickyOffset <= 16) current = cat.id;
+        else break;
+      }
+      setActiveCategory((prev) => (prev === current ? prev : current));
+    }
+
+    function onScroll() {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(computeActive);
+      }
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    computeActive();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [categoriesWithItems, stickyOffset]);
+
+  // Mantém a aba ativa sempre visível dentro da barra horizontal de categorias.
+  useEffect(() => {
+    tabRefs.current.get(activeCategory)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [activeCategory]);
+
+  function handleTabClick(catId: string) {
+    const el = sectionRefs.current.get(catId);
+    if (!el) return;
+    isProgrammaticScroll.current = true;
+    setActiveCategory(catId);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (programmaticScrollTimeout.current) window.clearTimeout(programmaticScrollTimeout.current);
+    programmaticScrollTimeout.current = window.setTimeout(() => {
+      isProgrammaticScroll.current = false;
+    }, 700);
+  }
+
   function handleAdd(item: MenuItem) {
     addToCart({ menuItemId: item.id, name: item.name, price: item.price, quantity: 1 });
     bumpCart();
+  }
+
+  function handleAddWithOptions(item: MenuItem, notes: string, selectedOptionIds: string[], unitPrice: number) {
+    addToCart({
+      menuItemId: item.id,
+      name: item.name,
+      price: unitPrice,
+      quantity: 1,
+      notes: notes || undefined,
+      selectedOptionIds: selectedOptionIds.length ? selectedOptionIds : undefined,
+    });
+    bumpCart();
+    setDetailItem(null);
   }
 
   async function handleConfirmOrder(customerName: string, tableNumber: string) {
@@ -77,10 +185,6 @@ export default function MenuPage() {
     setCartDrawerOpen(false);
     navigate('/comanda');
   }
-
-  const filtered = items.filter(
-    (i) => !activeCategory || i.categoryId === activeCategory || i.category === activeCategory
-  );
 
   const wrapStyle: React.CSSProperties = {
     maxWidth: 480,
@@ -117,8 +221,20 @@ export default function MenuPage() {
     background: '#0D1B2A',
     paddingBottom: 12,
     position: 'sticky',
-    top: 72,
+    top: headerHeight,
     zIndex: 49,
+  };
+
+  const sectionStyle: React.CSSProperties = {
+    scrollMarginTop: stickyOffset + 8,
+    marginBottom: 28,
+  };
+
+  const sectionHeadingStyle: React.CSSProperties = {
+    fontSize: 16,
+    fontWeight: 800,
+    color: '#0D1B2A',
+    margin: '4px 0 10px',
   };
 
   const tabsInnerStyle: React.CSSProperties = {
@@ -184,20 +300,24 @@ export default function MenuPage() {
 
   return (
     <div style={wrapStyle}>
-      <div style={headerStyle}>
+      <div style={headerStyle} ref={headerRef}>
         <div style={logoStyle}>BODOGAMI</div>
         <div style={taglineStyle}>Cardápio Digital</div>
       </div>
 
-      {categories.length > 0 && (
-        <div style={tabsWrapStyle}>
+      {categoriesWithItems.length > 0 && (
+        <div style={tabsWrapStyle} ref={tabsWrapRef}>
           <div style={tabsInnerStyle}>
-            {categories.map((cat) => {
+            {categoriesWithItems.map(({ cat }) => {
               const active = activeCategory === cat.id;
               return (
                 <button
                   key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
+                  ref={(el) => {
+                    if (el) tabRefs.current.set(cat.id, el);
+                    else tabRefs.current.delete(cat.id);
+                  }}
+                  onClick={() => handleTabClick(cat.id)}
                   style={{
                     flexShrink: 0,
                     padding: '7px 16px',
@@ -229,22 +349,32 @@ export default function MenuPage() {
 
         {!loading && error && <div style={errorStyle}>{error}</div>}
 
-        {!loading && !error && filtered.length === 0 && (
+        {!loading && !error && categoriesWithItems.length === 0 && (
           <div style={loadingStyle}>
             <span style={{ fontSize: 36 }}>🍽️</span>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>Nenhum item nesta categoria</span>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Nenhum item disponível</span>
           </div>
         )}
 
-        {!loading && !error && filtered.length > 0 && (
-          <div style={gridStyle}>
-            {filtered
-              .sort((a, b) => a.sortOrder - b.sortOrder)
-              .map((item) => (
-                <ProdutoCard key={item.id} item={item} onAdd={handleAdd} />
-              ))}
-          </div>
-        )}
+        {!loading &&
+          !error &&
+          categoriesWithItems.map(({ cat, items: catItems }) => (
+            <div
+              key={cat.id}
+              style={sectionStyle}
+              ref={(el) => {
+                if (el) sectionRefs.current.set(cat.id, el);
+                else sectionRefs.current.delete(cat.id);
+              }}
+            >
+              <h3 style={sectionHeadingStyle}>{cat.name}</h3>
+              <div style={gridStyle}>
+                {catItems.map((item) => (
+                  <ProdutoCard key={item.id} item={item} onAdd={handleAdd} onOpenDetail={setDetailItem} />
+                ))}
+              </div>
+            </div>
+          ))}
       </div>
 
       <button
@@ -273,6 +403,8 @@ export default function MenuPage() {
         onConfirm={handleConfirmOrder}
         qrTable={qrTable}
       />
+
+      <ItemDetailModal item={detailItem} onClose={() => setDetailItem(null)} onAdd={handleAddWithOptions} />
     </div>
   );
 }

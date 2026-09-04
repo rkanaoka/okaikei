@@ -20,6 +20,7 @@ export interface PedidoItem {
   menuItemId: number | string;
   qty: number;
   notes?: string;
+  selectedOptionIds?: string[];
 }
 
 export interface CreatePedidoBody {

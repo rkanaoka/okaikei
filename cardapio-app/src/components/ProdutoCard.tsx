@@ -4,13 +4,14 @@ import type { MenuItem } from '../lib/types';
 interface Props {
   item: MenuItem;
   onAdd: (item: MenuItem) => void;
+  onOpenDetail: (item: MenuItem) => void;
 }
 
 function formatPrice(value: number): string {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export default function ProdutoCard({ item, onAdd }: Props) {
+export default function ProdutoCard({ item, onAdd, onOpenDetail }: Props) {
   const cardStyle: React.CSSProperties = {
     background: '#fff',
     borderRadius: 12,
@@ -20,6 +21,7 @@ export default function ProdutoCard({ item, onAdd }: Props) {
     flexDirection: 'column',
     position: 'relative',
     opacity: item.available ? 1 : 0.55,
+    cursor: item.available ? 'pointer' : 'default',
   };
 
   const imgContainerStyle: React.CSSProperties = {
@@ -109,8 +111,19 @@ export default function ProdutoCard({ item, onAdd }: Props) {
     letterSpacing: 0.5,
   };
 
+  const hasOptions = (item.optionGroups?.length ?? 0) > 0;
+
+  function handleQuickAdd(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!item.available) return;
+    // Item com grupos de opções sempre precisa passar pela tela de
+    // customização antes de ir pro carrinho.
+    if (hasOptions) onOpenDetail(item);
+    else onAdd(item);
+  }
+
   return (
-    <div style={cardStyle}>
+    <div style={cardStyle} onClick={() => onOpenDetail(item)}>
       <div style={imgContainerStyle}>
         {item.imageUrl ? (
           <img
@@ -131,8 +144,8 @@ export default function ProdutoCard({ item, onAdd }: Props) {
           <button
             style={addBtnStyle}
             disabled={!item.available}
-            onClick={() => item.available && onAdd(item)}
-            aria-label={`Adicionar ${item.name}`}
+            onClick={handleQuickAdd}
+            aria-label={hasOptions ? `Ver opções de ${item.name}` : `Adicionar ${item.name}`}
           >
             +
           </button>

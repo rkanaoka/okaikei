@@ -32,24 +32,22 @@ export default function CartDrawer({
     setCartState(getCart());
   }, [open, cartVersion]);
 
-  function handleRemove(menuItemId: string) {
-    removeFromCart(menuItemId);
+  function handleRemove(id: string) {
+    removeFromCart(id);
     const updated = getCart();
     setCartState(updated);
     onCartChange();
   }
 
-  function handleQty(menuItemId: string, qty: number) {
-    updateQty(menuItemId, qty);
+  function handleQty(id: string, qty: number) {
+    updateQty(id, qty);
     const updated = getCart();
     setCartState(updated);
     onCartChange();
   }
 
-  function handleNoteChange(menuItemId: string, note: string) {
-    const updated = cart.map((c) =>
-      c.menuItemId === menuItemId ? { ...c, notes: note } : c
-    );
+  function handleNoteChange(id: string, note: string) {
+    const updated = cart.map((c) => (c.id === id ? { ...c, notes: note } : c));
     setCartState(updated);
     setCart(updated);
   }
@@ -238,7 +236,7 @@ export default function CartDrawer({
         ) : (
           <div style={listStyle}>
             {cart.map((item) => (
-              <div key={item.menuItemId} style={itemRowStyle}>
+              <div key={item.id} style={itemRowStyle}>
                 <div style={itemTopStyle}>
                   <span style={itemNameStyle}>{item.name}</span>
                   <span style={itemPriceStyle}>
@@ -246,7 +244,7 @@ export default function CartDrawer({
                   </span>
                   <button
                     style={removeBtnStyle}
-                    onClick={() => handleRemove(item.menuItemId)}
+                    onClick={() => handleRemove(item.id)}
                     aria-label={`Remover ${item.name}`}
                   >
                     ×
@@ -261,8 +259,8 @@ export default function CartDrawer({
                 >
                   <QuantityControl
                     quantity={item.quantity}
-                    onDecrease={() => handleQty(item.menuItemId, item.quantity - 1)}
-                    onIncrease={() => handleQty(item.menuItemId, item.quantity + 1)}
+                    onDecrease={() => handleQty(item.id, item.quantity - 1)}
+                    onIncrease={() => handleQty(item.id, item.quantity + 1)}
                     min={1}
                   />
                   <span style={{ fontSize: 12, color: '#aaa' }}>
@@ -274,7 +272,7 @@ export default function CartDrawer({
                   placeholder="Observação (opcional)"
                   rows={1}
                   value={item.notes ?? ''}
-                  onChange={(e) => handleNoteChange(item.menuItemId, e.target.value)}
+                  onChange={(e) => handleNoteChange(item.id, e.target.value)}
                 />
               </div>
             ))}
