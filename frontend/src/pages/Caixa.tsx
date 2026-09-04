@@ -205,7 +205,19 @@ export default function Caixa() {
   const subtotal   = (comanda?.items ?? []).reduce((s:number,i:any) => s + i.quantity * parseFloat(i.unitPrice), 0);
   const discRaw    = discount.type === 'percent' ? subtotal * (parseFloat(discount.value)||0) / 100 : (parseFloat(discount.value)||0);
   const discVal    = Math.min(subtotal, Math.max(0, discRaw));
-  const voucherVal = appliedVoucher ? Math.min(subtotal, parseFloat(appliedVoucher.amount) || 0) : 0;
+  // Espelha o calculo de OrdersService.computeVoucherDiscount no backend, só pra
+  // pré-visualizar o total corretamente antes de fechar (o backend é quem decide de verdade).
+  const voucherVal = (() => {
+    if (!appliedVoucher) return 0;
+    const items = comanda?.items ?? [];
+    const base = appliedVoucher.menuItemIds?.length > 0
+      ? items.filter((i:any) => appliedVoucher.menuItemIds.includes(i.menuItemId)).reduce((s:number,i:any) => s + i.quantity * parseFloat(i.unitPrice), 0)
+      : subtotal;
+    const raw = appliedVoucher.discountType === 'percent'
+      ? base * (parseFloat(appliedVoucher.amount) || 0) / 100
+      : Math.min(base, parseFloat(appliedVoucher.amount) || 0);
+    return Math.max(0, Math.min(subtotal, raw));
+  })();
   const surchVal   = surcharge.type && parseFloat(surcharge.value) > 0
     ? (surcharge.type === 'percent' ? subtotal * parseFloat(surcharge.value) / 100 : parseFloat(surcharge.value))
     : 0;
@@ -639,7 +651,9 @@ export default function Caixa() {
                   <div style={{ background:'#fff', border:`1.5px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px', marginTop:8 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:4 }}>
                       <span style={{ color:'#666' }}>Valor</span>
-                      <span style={{ fontWeight:700, color:BRAND.navy }}>{fmtBRL(voucherLookup.amount)}</span>
+                      <span style={{ fontWeight:700, color:BRAND.navy }}>
+                        {voucherLookup.discountType === 'percent' ? `${voucherLookup.amount}%` : fmtBRL(voucherLookup.amount)}
+                      </span>
                     </div>
                     <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:4 }}>
                       <span style={{ color:'#666' }}>Vencimento</span>
@@ -649,6 +663,20 @@ export default function Caixa() {
                           : 'Sem vencimento'}
                       </span>
                     </div>
+                    {voucherLookup.minOrderValue != null && (
+                      <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:'#888' }}>
+                        <span>Pedido mínimo</span>
+                        <span>{fmtBRL(voucherLookup.minOrderValue)}</span>
+                      </div>
+                    )}
+                    {voucherLookup.menuItemIds?.length > 0 && (
+                      <div style={{ fontSize:12, marginBottom:4, color:'#888' }}>Válido só em itens específicos</div>
+                    )}
+                    {voucherLookup.validDaysOfWeek?.length > 0 && (
+                      <div style={{ fontSize:12, marginBottom:4, color:'#888' }}>
+                        Válido: {voucherLookup.validDaysOfWeek.map((d:number) => ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d]).join(', ')}
+                      </div>
+                    )}
                     <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom: (voucherLookup.status==='PAID' || voucherLookup.status==='RECURRING') ? 10 : 0 }}>
                       <span style={{ color:'#666' }}>Status</span>
                       <span style={{ fontWeight:700, color: (voucherLookup.status==='PAID' || voucherLookup.status==='RECURRING') ? BRAND.green : BRAND.red }}>

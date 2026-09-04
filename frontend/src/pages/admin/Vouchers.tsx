@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { vouchersApi } from '@/services/api';
+import { vouchersApi, menuApi } from '@/services/api';
 import { BRAND, fmtBRL, fmtDate, Card, PageHeader, Btn, TableHead } from './shared';
+
+const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   NEGOTIATION: { label: 'Negociação', color: '#b38600',    bg: '#FFD60A22' },
@@ -35,13 +37,15 @@ type FormState = {
   id?: string;
   customerName: string; customerCpf: string; customerBirthDate: string;
   customerAddress: string; customerPhone: string; customerEmail: string;
-  amount: string; dueDate: string; status: string;
+  discountType: 'fixed' | 'percent'; amount: string; dueDate: string; status: string;
+  menuItemIds: string[]; minOrderValue: string; validDaysOfWeek: number[];
   code?: string; confirmationPassword?: string;
 };
 
 const emptyForm: FormState = {
   customerName:'', customerCpf:'', customerBirthDate:'', customerAddress:'',
-  customerPhone:'', customerEmail:'', amount:'', dueDate:'', status:'NEGOTIATION',
+  customerPhone:'', customerEmail:'', discountType:'fixed', amount:'', dueDate:'', status:'NEGOTIATION',
+  menuItemIds:[], minOrderValue:'', validDaysOfWeek:[],
 };
 
 export default function Vouchers() {
@@ -53,6 +57,7 @@ export default function Vouchers() {
   const [err, setErr]           = useState('');
   const [justCreated, setJustCreated] = useState<any>(null);
   const [revealedId, setRevealedId]   = useState<string | null>(null);
+  const [menuItems, setMenuItems]     = useState<any[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,21 +70,37 @@ export default function Vouchers() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { menuApi.list().then((d: any) => setMenuItems(d)).catch(() => {}); }, []);
+
+  function toggleMenuItem(id: string) {
+    if (!form) return;
+    const has = form.menuItemIds.includes(id);
+    setForm({ ...form, menuItemIds: has ? form.menuItemIds.filter(x => x !== id) : [...form.menuItemIds, id] });
+  }
+  function toggleWeekday(day: number) {
+    if (!form) return;
+    const has = form.validDaysOfWeek.includes(day);
+    setForm({ ...form, validDaysOfWeek: has ? form.validDaysOfWeek.filter(x => x !== day) : [...form.validDaysOfWeek, day] });
+  }
 
   function openCreate() { setForm({ ...emptyForm }); setErr(''); }
 
   function openEdit(v: any) {
     setForm({
       id: v.id,
-      customerName: v.customerName,
-      customerCpf: maskCpf(v.customerCpf),
-      customerBirthDate: toDateInput(v.customerBirthDate),
-      customerAddress: v.customerAddress,
-      customerPhone: maskPhone(v.customerPhone),
-      customerEmail: v.customerEmail,
+      customerName: v.customerName ?? '',
+      customerCpf: v.customerCpf ? maskCpf(v.customerCpf) : '',
+      customerBirthDate: toDateInput(v.customerBirthDate ?? ''),
+      customerAddress: v.customerAddress ?? '',
+      customerPhone: v.customerPhone ? maskPhone(v.customerPhone) : '',
+      customerEmail: v.customerEmail ?? '',
+      discountType: v.discountType === 'percent' ? 'percent' : 'fixed',
       amount: String(v.amount),
-      dueDate: toDateInput(v.dueDate),
+      dueDate: toDateInput(v.dueDate ?? ''),
       status: v.status,
+      menuItemIds: v.menuItemIds ?? [],
+      minOrderValue: v.minOrderValue != null ? String(v.minOrderValue) : '',
+      validDaysOfWeek: v.validDaysOfWeek ?? [],
       code: v.code,
       confirmationPassword: v.confirmationPassword,
     });
@@ -88,25 +109,33 @@ export default function Vouchers() {
 
   async function save() {
     if (!form) return;
-    if (!form.customerName.trim())            return setErr('Informe o nome do cliente.');
-    if (form.customerCpf.replace(/\D/g,'').length !== 11) return setErr('CPF inválido.');
-    if (!form.customerBirthDate)               return setErr('Informe a data de nascimento.');
-    if (!form.customerAddress.trim())          return setErr('Informe o endereço.');
-    if (form.customerPhone.replace(/\D/g,'').length < 10) return setErr('Telefone inválido.');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail)) return setErr('E-mail inválido.');
+    const isRecurring = form.status === 'RECURRING';
+    if (!isRecurring) {
+      if (!form.customerName.trim())            return setErr('Informe o nome do cliente.');
+      if (form.customerCpf.replace(/\D/g,'').length !== 11) return setErr('CPF inválido.');
+      if (!form.customerBirthDate)               return setErr('Informe a data de nascimento.');
+      if (!form.customerAddress.trim())          return setErr('Informe o endereço.');
+      if (form.customerPhone.replace(/\D/g,'').length < 10) return setErr('Telefone inválido.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail)) return setErr('E-mail inválido.');
+    }
     if (!form.amount || parseFloat(form.amount) <= 0) return setErr('Informe um valor válido.');
+    if (form.discountType === 'percent' && parseFloat(form.amount) > 100) return setErr('Percentual não pode passar de 100.');
     // Vouchers RECURRING não exigem vencimento — ficam disponíveis sem prazo se não informado
-    if (form.status !== 'RECURRING' && !form.dueDate) return setErr('Informe a data de vencimento.');
+    if (!isRecurring && !form.dueDate) return setErr('Informe a data de vencimento.');
 
     setSaving(true); setErr('');
     const payload = {
-      customerName: form.customerName.trim(),
-      customerCpf: form.customerCpf,
-      customerBirthDate: form.customerBirthDate,
-      customerAddress: form.customerAddress.trim(),
-      customerPhone: form.customerPhone,
-      customerEmail: form.customerEmail.trim(),
+      customerName: isRecurring ? undefined : form.customerName.trim(),
+      customerCpf: isRecurring ? undefined : form.customerCpf,
+      customerBirthDate: isRecurring ? undefined : form.customerBirthDate,
+      customerAddress: isRecurring ? undefined : form.customerAddress.trim(),
+      customerPhone: isRecurring ? undefined : form.customerPhone,
+      customerEmail: isRecurring ? undefined : form.customerEmail.trim(),
+      discountType: form.discountType,
       amount: parseFloat(form.amount),
+      menuItemIds: form.menuItemIds,
+      minOrderValue: form.minOrderValue ? parseFloat(form.minOrderValue) : undefined,
+      validDaysOfWeek: form.validDaysOfWeek,
       dueDate: form.dueDate || undefined,
       status: form.status,
     };
@@ -147,52 +176,100 @@ export default function Vouchers() {
               {form.id ? 'Editar Voucher' : 'Novo Voucher'}
             </h2>
 
-            <p style={{ margin:'0 0 12px', fontSize:11, fontWeight:700, color:'#999', textTransform:'uppercase', letterSpacing:.5 }}>
-              Dados para faturamento
-            </p>
-            <div style={{ display:'flex', gap:10, marginBottom:14 }}>
-              <div style={{ flex:2 }}>
-                <label style={labelStyle}>Nome completo</label>
-                <input value={form.customerName} onChange={e => setForm({ ...form, customerName:e.target.value })}
-                  placeholder="Nome do titular" style={inputStyle} />
-              </div>
-              <div style={{ flex:1 }}>
-                <label style={labelStyle}>CPF</label>
-                <input value={form.customerCpf} onChange={e => setForm({ ...form, customerCpf: maskCpf(e.target.value) })}
-                  placeholder="000.000.000-00" style={inputStyle} />
-              </div>
-            </div>
-            <div style={{ display:'flex', gap:10, marginBottom:14 }}>
-              <div style={{ flex:1 }}>
-                <label style={labelStyle}>Data de nascimento</label>
-                <input type="date" value={form.customerBirthDate}
-                  onChange={e => setForm({ ...form, customerBirthDate:e.target.value })} style={inputStyle} />
-              </div>
-              <div style={{ flex:1 }}>
-                <label style={labelStyle}>Telefone</label>
-                <input value={form.customerPhone} onChange={e => setForm({ ...form, customerPhone: maskPhone(e.target.value) })}
-                  placeholder="(11) 91234-5678" style={inputStyle} />
-              </div>
-            </div>
-            <div style={{ marginBottom:14 }}>
-              <label style={labelStyle}>Endereço</label>
-              <input value={form.customerAddress} onChange={e => setForm({ ...form, customerAddress:e.target.value })}
-                placeholder="Rua, número, bairro, cidade" style={inputStyle} />
-            </div>
-            <div style={{ marginBottom:18 }}>
-              <label style={labelStyle}>E-mail</label>
-              <input type="email" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail:e.target.value })}
-                placeholder="cliente@email.com" style={inputStyle} />
-            </div>
+            {form.status !== 'RECURRING' && (
+              <>
+                <p style={{ margin:'0 0 12px', fontSize:11, fontWeight:700, color:'#999', textTransform:'uppercase', letterSpacing:.5 }}>
+                  Dados para faturamento
+                </p>
+                <div style={{ display:'flex', gap:10, marginBottom:14 }}>
+                  <div style={{ flex:2 }}>
+                    <label style={labelStyle}>Nome completo</label>
+                    <input value={form.customerName} onChange={e => setForm({ ...form, customerName:e.target.value })}
+                      placeholder="Nome do titular" style={inputStyle} />
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <label style={labelStyle}>CPF</label>
+                    <input value={form.customerCpf} onChange={e => setForm({ ...form, customerCpf: maskCpf(e.target.value) })}
+                      placeholder="000.000.000-00" style={inputStyle} />
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:10, marginBottom:14 }}>
+                  <div style={{ flex:1 }}>
+                    <label style={labelStyle}>Data de nascimento</label>
+                    <input type="date" value={form.customerBirthDate}
+                      onChange={e => setForm({ ...form, customerBirthDate:e.target.value })} style={inputStyle} />
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <label style={labelStyle}>Telefone</label>
+                    <input value={form.customerPhone} onChange={e => setForm({ ...form, customerPhone: maskPhone(e.target.value) })}
+                      placeholder="(11) 91234-5678" style={inputStyle} />
+                  </div>
+                </div>
+                <div style={{ marginBottom:14 }}>
+                  <label style={labelStyle}>Endereço</label>
+                  <input value={form.customerAddress} onChange={e => setForm({ ...form, customerAddress:e.target.value })}
+                    placeholder="Rua, número, bairro, cidade" style={inputStyle} />
+                </div>
+                <div style={{ marginBottom:18 }}>
+                  <label style={labelStyle}>E-mail</label>
+                  <input type="email" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail:e.target.value })}
+                    placeholder="cliente@email.com" style={inputStyle} />
+                </div>
+              </>
+            )}
 
             <p style={{ margin:'0 0 12px', fontSize:11, fontWeight:700, color:'#999', textTransform:'uppercase', letterSpacing:.5 }}>
               Dados do voucher
             </p>
             <div style={{ display:'flex', gap:10, marginBottom:14 }}>
               <div style={{ flex:1 }}>
-                <label style={labelStyle}>Valor (R$)</label>
-                <input type="number" min="0" step="0.01" value={form.amount}
-                  onChange={e => setForm({ ...form, amount:e.target.value })} placeholder="100.00" style={inputStyle} />
+                <label style={labelStyle}>Tipo de desconto</label>
+                <select value={form.discountType} onChange={e => setForm({ ...form, discountType: e.target.value as 'fixed'|'percent' })} style={inputStyle}>
+                  <option value="fixed">Valor fixo (R$)</option>
+                  <option value="percent">Porcentagem (%)</option>
+                </select>
+              </div>
+              <div style={{ flex:1 }}>
+                <label style={labelStyle}>{form.discountType === 'percent' ? 'Percentual (%)' : 'Valor (R$)'}</label>
+                <input type="number" min="0" max={form.discountType === 'percent' ? 100 : undefined} step="0.01" value={form.amount}
+                  onChange={e => setForm({ ...form, amount:e.target.value })}
+                  placeholder={form.discountType === 'percent' ? '10' : '100.00'} style={inputStyle} />
+              </div>
+              <div style={{ flex:1 }}>
+                <label style={labelStyle}>Status</label>
+                <select value={form.status} onChange={e => setForm({ ...form, status:e.target.value })} style={inputStyle}>
+                  {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <label style={labelStyle}>Itens específicos do cardápio (opcional)</label>
+              <p style={{ margin:'0 0 8px', fontSize:11, color:'#999' }}>
+                Se nenhum for selecionado, o desconto vale sobre o pedido inteiro.
+              </p>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, maxHeight:140, overflowY:'auto', border:'1.5px solid #eee', borderRadius:8, padding:10 }}>
+                {menuItems.map((it:any) => {
+                  const sel = form.menuItemIds.includes(it.id);
+                  return (
+                    <button key={it.id} type="button" onClick={() => toggleMenuItem(it.id)} style={{
+                      padding:'5px 12px', borderRadius:999, border:`1.5px solid ${sel ? BRAND.orange : '#ddd'}`,
+                      background: sel ? BRAND.orange : '#fff', color: sel ? '#fff' : '#555',
+                      fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit',
+                    }}>
+                      {it.name}
+                    </button>
+                  );
+                })}
+                {menuItems.length === 0 && <span style={{ fontSize:12, color:'#ccc' }}>Carregando itens…</span>}
+              </div>
+            </div>
+
+            <div style={{ display:'flex', gap:10, marginBottom:14 }}>
+              <div style={{ flex:1 }}>
+                <label style={labelStyle}>Pedido mínimo (R$, opcional)</label>
+                <input type="number" min="0" step="0.01" value={form.minOrderValue}
+                  onChange={e => setForm({ ...form, minOrderValue:e.target.value })} placeholder="Sem mínimo" style={inputStyle} />
               </div>
               <div style={{ flex:1 }}>
                 <label style={labelStyle}>Vencimento{form.status === 'RECURRING' ? ' (opcional)' : ''}</label>
@@ -202,11 +279,26 @@ export default function Vouchers() {
                   <p style={{ margin:'4px 0 0', fontSize:11, color:'#999' }}>Sem prazo — disponível indefinidamente</p>
                 )}
               </div>
-              <div style={{ flex:1 }}>
-                <label style={labelStyle}>Status</label>
-                <select value={form.status} onChange={e => setForm({ ...form, status:e.target.value })} style={inputStyle}>
-                  {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
+            </div>
+
+            <div style={{ marginBottom:18 }}>
+              <label style={labelStyle}>Dias da semana válidos (opcional)</label>
+              <p style={{ margin:'0 0 8px', fontSize:11, color:'#999' }}>
+                Se nenhum for selecionado, vale todos os dias.
+              </p>
+              <div style={{ display:'flex', gap:6 }}>
+                {WEEKDAY_LABELS.map((label, day) => {
+                  const sel = form.validDaysOfWeek.includes(day);
+                  return (
+                    <button key={day} type="button" onClick={() => toggleWeekday(day)} style={{
+                      width:44, padding:'8px 0', borderRadius:8, border:`1.5px solid ${sel ? BRAND.orange : '#ddd'}`,
+                      background: sel ? BRAND.orange : '#fff', color: sel ? '#fff' : '#555',
+                      fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit',
+                    }}>
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -286,9 +378,14 @@ export default function Vouchers() {
                   const revealed = revealedId === v.id;
                   return (
                     <tr key={v.id} style={{ borderBottom:'1px solid #f5f5f5' }}>
-                      <td style={{ padding:'12px 16px', fontWeight:700, color:BRAND.navy }}>{v.customerName}</td>
-                      <td style={{ padding:'12px 16px', color:'#666' }}>{maskCpf(v.customerCpf)}</td>
-                      <td style={{ padding:'12px 16px', fontWeight:800, color:BRAND.green }}>{fmtBRL(v.amount)}</td>
+                      <td style={{ padding:'12px 16px', fontWeight:700, color:BRAND.navy }}>{v.customerName || '—'}</td>
+                      <td style={{ padding:'12px 16px', color:'#666' }}>{v.customerCpf ? maskCpf(v.customerCpf) : '—'}</td>
+                      <td style={{ padding:'12px 16px', fontWeight:800, color:BRAND.green }}>
+                        {v.discountType === 'percent' ? `${v.amount}%` : fmtBRL(v.amount)}
+                        {(v.menuItemIds?.length > 0 || v.minOrderValue != null || v.validDaysOfWeek?.length > 0) && (
+                          <div style={{ fontSize:10, fontWeight:600, color:'#999', marginTop:2 }}>com condições</div>
+                        )}
+                      </td>
                       <td style={{ padding:'12px 16px', color:'#666' }}>
                         {v.dueDate ? new Date(v.dueDate).toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' }) : 'Sem vencimento'}
                       </td>

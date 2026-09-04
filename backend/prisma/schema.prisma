@@ -316,13 +316,21 @@ model Voucher {
   code                 String        @unique @db.VarChar(20)
   // Vouchers RECURRING não exigem senha de conferência — nulo nesse caso
   confirmationPassword String?       @map("confirmation_password") @db.VarChar(6)
-  customerName         String        @map("customer_name") @db.VarChar(100)
-  customerCpf          String        @map("customer_cpf") @db.VarChar(14)
-  customerBirthDate    DateTime      @map("customer_birth_date") @db.Date
-  customerAddress      String        @map("customer_address") @db.VarChar(200)
-  customerPhone        String        @map("customer_phone") @db.VarChar(20)
-  customerEmail        String        @map("customer_email") @db.VarChar(200)
+  // Dados de faturamento — opcionais: vouchers RECURRING não têm cliente vinculado
+  customerName         String?       @map("customer_name") @db.VarChar(100)
+  customerCpf          String?       @map("customer_cpf") @db.VarChar(14)
+  customerBirthDate    DateTime?     @map("customer_birth_date") @db.Date
+  customerAddress      String?       @map("customer_address") @db.VarChar(200)
+  customerPhone        String?       @map("customer_phone") @db.VarChar(20)
+  customerEmail        String?       @map("customer_email") @db.VarChar(200)
+  // Desconto: 'fixed' (R$) ou 'percent' (0-100); amount é o valor conforme o tipo
+  discountType         String        @default("fixed") @map("discount_type") @db.VarChar(10)
   amount               Decimal       @db.Decimal(10, 2)
+  // Vazio = aplica sobre o pedido inteiro; senão, só sobre os itens listados
+  menuItemIds          String[]      @default([]) @map("menu_item_ids")
+  // Condições de uso — nulo/vazio = sem restrição
+  minOrderValue        Decimal?      @map("min_order_value") @db.Decimal(10, 2)
+  validDaysOfWeek      Int[]         @default([]) @map("valid_days_of_week") // 0=domingo..6=sábado
   status               VoucherStatus @default(NEGOTIATION)
   // Nulo = sem prazo de validade (permitido apenas para vouchers RECURRING)
   dueDate              DateTime?     @map("due_date") @db.Date

@@ -145,9 +145,11 @@ export const reasonsApi = {
 
 // ── Vouchers (Cupons de Desconto) ──────────────────────────────────────────────
 export type VoucherInput = {
-  customerName: string; customerCpf: string; customerBirthDate: string;
-  customerAddress: string; customerPhone: string; customerEmail: string;
-  amount: number; dueDate?: string; status?: string; code?: string;
+  customerName?: string; customerCpf?: string; customerBirthDate?: string;
+  customerAddress?: string; customerPhone?: string; customerEmail?: string;
+  discountType?: 'fixed' | 'percent'; amount: number;
+  menuItemIds?: string[]; minOrderValue?: number; validDaysOfWeek?: number[];
+  dueDate?: string; status?: string; code?: string;
 };
 
 export const vouchersApi = {

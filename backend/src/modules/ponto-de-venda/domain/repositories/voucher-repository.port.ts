@@ -6,14 +6,18 @@ export interface VoucherRepositoryPort {
   findByCode(code: string): Promise<any | null>;
   create(data: {
     id: string; code: string; password?: string | null;
-    customerName: string; customerCpf: string; customerBirthDate: Date;
-    customerAddress: string; customerPhone: string; customerEmail: string;
-    amount: number; dueDate: Date | null; status: string;
+    customerName: string | null; customerCpf: string | null; customerBirthDate: Date | null;
+    customerAddress: string | null; customerPhone: string | null; customerEmail: string | null;
+    discountType: string; amount: number;
+    menuItemIds: string[]; minOrderValue: number | null; validDaysOfWeek: number[];
+    dueDate: Date | null; status: string;
   }): Promise<any>;
   update(id: string, data: Partial<{
-    customerName: string; customerCpf: string; customerBirthDate: Date;
-    customerAddress: string; customerPhone: string; customerEmail: string;
-    amount: number; dueDate: Date | null; status: string;
+    customerName: string | null; customerCpf: string | null; customerBirthDate: Date | null;
+    customerAddress: string | null; customerPhone: string | null; customerEmail: string | null;
+    discountType: string; amount: number;
+    menuItemIds: string[]; minOrderValue: number | null; validDaysOfWeek: number[];
+    dueDate: Date | null; status: string;
   }>): Promise<any>;
   updateStatus(id: string, status: string): Promise<any>;
   findUsageHistory(): Promise<any[]>;

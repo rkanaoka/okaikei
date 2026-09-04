@@ -275,7 +275,7 @@ export class OrdersService {
       if (isRecurringVoucher && voucher.dueDate && new Date(voucher.dueDate) < new Date()) {
         throw new BadRequestException('Voucher recorrente vencido');
       }
-      voucherDiscount = Math.min(subtotal, Number(voucher.amount));
+      voucherDiscount = this.computeVoucherDiscount(voucher, comanda.items, subtotal);
     }
 
     let total = subtotal;
@@ -340,6 +340,31 @@ export class OrdersService {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /** Calcula o desconto de um voucher, aplicando suas condições (dia da semana,
+   * pedido mínimo, itens específicos) e tipo (percentual ou valor fixo). */
+  private computeVoucherDiscount(voucher: any, items: any[], subtotal: number): number {
+    if (voucher.minOrderValue != null && subtotal < Number(voucher.minOrderValue)) {
+      throw new BadRequestException(
+        `Este voucher exige pedido mínimo de ${Number(voucher.minOrderValue).toFixed(2)}`,
+      );
+    }
+    if (voucher.validDaysOfWeek?.length > 0 && !voucher.validDaysOfWeek.includes(new Date().getDay())) {
+      throw new BadRequestException('Este voucher não é válido hoje');
+    }
+
+    const base = voucher.menuItemIds?.length > 0
+      ? items
+          .filter((i: any) => voucher.menuItemIds.includes(i.menuItemId))
+          .reduce((s: number, i: any) => s + Number(i.unitPrice) * i.quantity, 0)
+      : subtotal;
+
+    const raw = voucher.discountType === 'percent'
+      ? base * Number(voucher.amount) / 100
+      : Math.min(base, Number(voucher.amount));
+
+    return Math.max(0, Math.min(subtotal, raw));
+  }
 
   private serviceFeeBase(items: any[]): number {
     return (items ?? []).reduce((s: number, i: any) => {

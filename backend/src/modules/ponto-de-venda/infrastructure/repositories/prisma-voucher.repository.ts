@@ -32,18 +32,22 @@ export class PrismaVoucherRepository implements VoucherRepositoryPort {
 
   async create(data: {
     id: string; code: string; password?: string | null;
-    customerName: string; customerCpf: string; customerBirthDate: Date;
-    customerAddress: string; customerPhone: string; customerEmail: string;
-    amount: number; dueDate: Date | null; status: string;
+    customerName: string | null; customerCpf: string | null; customerBirthDate: Date | null;
+    customerAddress: string | null; customerPhone: string | null; customerEmail: string | null;
+    discountType: string; amount: number;
+    menuItemIds: string[]; minOrderValue: number | null; validDaysOfWeek: number[];
+    dueDate: Date | null; status: string;
   }) {
     const { password, ...rest } = data;
     return this.v.create({ data: { ...rest, confirmationPassword: password ?? null } });
   }
 
   async update(id: string, data: Partial<{
-    customerName: string; customerCpf: string; customerBirthDate: Date;
-    customerAddress: string; customerPhone: string; customerEmail: string;
-    amount: number; dueDate: Date | null; status: string;
+    customerName: string | null; customerCpf: string | null; customerBirthDate: Date | null;
+    customerAddress: string | null; customerPhone: string | null; customerEmail: string | null;
+    discountType: string; amount: number;
+    menuItemIds: string[]; minOrderValue: number | null; validDaysOfWeek: number[];
+    dueDate: Date | null; status: string;
   }>) {
     return this.v.update({ where: { id }, data });
   }
