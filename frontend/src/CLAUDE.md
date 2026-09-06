@@ -36,6 +36,7 @@ src/
 - `@/` alias aponta para `src/` — sempre usar em imports
 - Fetch via `services/api.ts` — nunca `fetch()` direto nos componentes
 - WebSocket via `hooks/useSocket.ts`
+- Campos de valor em R$ → sempre `components/CurrencyInput.tsx`, nunca `<input type="number">` puro (ver `components/CLAUDE.md`)
 
 ## Não pertence aqui
 - Lógica de negócio pesada (validações complexas ficam no backend)

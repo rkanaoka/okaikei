@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, Fragment, type CSSProperties } from 'react';
 import { cashApi } from '@/services/api';
+import CurrencyInput from '@/components/CurrencyInput';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653' };
 const fmtBRL = (v:any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
@@ -114,8 +115,8 @@ function CloseTable({ methods, counts, onChange }: { methods:any[]; counts:Recor
                   <td style={{ padding:'8px 4px', fontWeight:700, color:BRAND.navy }}>{METHOD_LABEL[m.method] ?? m.method}</td>
                   <td style={{ padding:'8px 4px', textAlign:'right' }}>{fmtBRL(m.esperado)}</td>
                   <td style={{ padding:'8px 4px', textAlign:'right' }}>
-                    <input type="number" step="0.01" value={counts[m.method] ?? '0'}
-                      onChange={e=>onChange(m.method, e.target.value)}
+                    <CurrencyInput value={counts[m.method] ?? '0'}
+                      onChange={v=>onChange(m.method, v)}
                       style={{ width:80, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:6, padding:'4px 6px', fontSize:13, fontWeight:700, outline:'none' }} />
                   </td>
                   <td style={{ padding:'8px 4px', textAlign:'right', fontWeight:700, color: Math.abs(saldo) < 0.01 ? BRAND.green : BRAND.red }}>{fmtBRL(saldo)}</td>
@@ -243,7 +244,7 @@ export default function CashRegisterMenu() {
           <Modal title="Abertura de Frente de Caixa" onClose={()=>setShowOpen(false)}>
             <div style={fieldWrap}>
               <label style={labelStyle}>Valor em dinheiro (R$)</label>
-              <input type="number" min="0" step="0.01" value={openAmount} onChange={e=>setOpenAmount(e.target.value)} autoFocus placeholder="0,00" style={inputStyle} />
+              <CurrencyInput value={openAmount} onChange={setOpenAmount} autoFocus placeholder="0,00" style={inputStyle} />
             </div>
             <div style={fieldWrap}>
               <label style={labelStyle}>Observações <span style={{ fontWeight:400, textTransform:'none', opacity:.6 }}>(opcional)</span></label>
@@ -291,7 +292,7 @@ export default function CashRegisterMenu() {
         <Modal title={movementType === 'WITHDRAWAL' ? 'Retirada de Frente de Caixa' : 'Reforço de Frente de Caixa'} onClose={()=>setMovementType(null)}>
           <div style={fieldWrap}>
             <label style={labelStyle}>Valor (R$)</label>
-            <input type="number" min="0" step="0.01" value={movementAmount} onChange={e=>setMovementAmount(e.target.value)} autoFocus placeholder="0,00" style={inputStyle} />
+            <CurrencyInput value={movementAmount} onChange={setMovementAmount} autoFocus placeholder="0,00" style={inputStyle} />
           </div>
           <div style={fieldWrap}>
             <label style={labelStyle}>Observações <span style={{ fontWeight:400, textTransform:'none', opacity:.6 }}>(opcional)</span></label>

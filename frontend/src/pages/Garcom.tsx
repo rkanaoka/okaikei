@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { menuApi, tablesApi, comandasApi } from '@/services/api';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', navyLight:'#1A2E44', cream:'#FFF8F0' };
@@ -67,6 +68,7 @@ function TablesScreen({ onSelect }:{ onSelect:(table:any)=>void }) {
         <input
           value={filter} onChange={e=>setFilter(e.target.value)}
           placeholder="Buscar… (ex: 23, balcão, externa)"
+          autoFocus
           style={{ width:'100%', boxSizing:'border-box', border:`2px solid ${BRAND.navy}`, borderRadius:12, padding:'12px 16px', fontSize:16, background:'#fff', outline:'none', marginBottom:20 }}
         />
 
@@ -109,7 +111,7 @@ function TableComandasScreen({ table, onBack, onOpenOrder }:{ table:any; onBack:
   const load = useCallback(() => {
     setLoading(true);
     comandasApi.list()
-      .then((data:any) => setComandas(data.filter((c:any) => c.tableId === table.id && c.status !== 'CLOSED')))
+      .then((data:any) => setComandas(data.filter((c:any) => c.tableId === table.id && c.status !== 'CLOSED' && c.status !== 'CANCELLED')))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [table.id]);
@@ -188,10 +190,13 @@ function AddItems({ comanda, onClose }:any) {
   const [items, setItems]     = useState<any[]>([]);
   const [cart, setCart]       = useState<any[]>([]);
   const [cat, setCat]         = useState<string|null>(null);
+  const [subCat, setSubCat]   = useState<string|null>(null);
+  const [search, setSearch]   = useState('');
   const [noteIdx, setNoteIdx] = useState<number|null>(null);
   const [noteText, setNote]   = useState('');
   const [sending, setSending] = useState(false);
   const [toast, setToast]     = useState<any>(null);
+  const [cartMinimized, setCartMinimized] = useState(false);
 
   // Opções vinculadas ao item (ex: ponto da carne, adicionais)
   const [optionsTarget, setOptionsTarget]       = useState<any>(null);
@@ -201,8 +206,28 @@ function AddItems({ comanda, onClose }:any) {
 
   const cats    = [...new Set(items.map((i:any) => i.category))];
   const curCat  = cat ?? cats[0];
-  const visible = items.filter((i:any) => i.category === curCat);
   const catLabel: Record<string,string> = { kitchen:'🍱 Cozinha', bar:'🍺 Bar', cashier:'💰 Caixa' };
+
+  function selectCat(c: string) {
+    setCat(c);
+    setSubCat(null);
+  }
+
+  // Submenu de categorias do cardápio dentro do grupo Cozinha/Bar selecionado.
+  const subCategories = useMemo(() => {
+    const byId = new Map<string, { id:string; name:string; sortOrder:number }>();
+    items
+      .filter((i:any) => i.category === curCat && i.menuCategory)
+      .forEach((i:any) => { if (!byId.has(i.menuCategory.id)) byId.set(i.menuCategory.id, i.menuCategory); });
+    return [...byId.values()].sort((a,b) => a.sortOrder - b.sortOrder);
+  }, [items, curCat]);
+
+  // Busca global: ignora categoria/subcategoria e procura em Cozinha + Bar + Caixa.
+  const isSearching = search.trim().length > 0;
+  const visible = isSearching
+    ? items.filter((i:any) => i.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : items.filter((i:any) => i.category === curCat && (!subCat || i.categoryId === subCat));
+  const cartCount = cart.reduce((s:number,c:any) => s + c.qty, 0);
 
   function addToCart(item: any) {
     if (item.optionGroups?.length) { openOptions(item); return; }
@@ -264,9 +289,10 @@ function AddItems({ comanda, onClose }:any) {
   }
 
   return (
-    <div style={{ minHeight:'100vh', background:BRAND.navy, display:'flex', flexDirection:'column', paddingBottom:40 }}>
+    <div style={{ height:'100vh', background:BRAND.navy, display:'flex', flexDirection:'row', overflow:'hidden' }}>
+    <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', overflowY:'auto', paddingBottom:40 }}>
       {/* Header */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'20px 16px 12px', borderBottom:`2px solid ${BRAND.navyLight}` }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'20px 76px 12px 16px', borderBottom:`2px solid ${BRAND.navyLight}` }}>
         <div>
           <div style={{ fontSize:22, fontWeight:900, color:BRAND.yellow }}>{comanda.table?.label ?? 'Sem mesa'}</div>
           {comanda.customerName && <div style={{ fontSize:13, color:'#fff8', marginTop:2 }}>{comanda.customerName}</div>}
@@ -274,10 +300,31 @@ function AddItems({ comanda, onClose }:any) {
         <PillBtn variant="secondary" small onClick={onClose}>Fechar</PillBtn>
       </div>
 
+      {/* Busca global de itens */}
+      <div style={{ padding:'12px 16px 0', position:'relative' }}>
+        <input
+          value={search}
+          onChange={e=>setSearch(e.target.value)}
+          placeholder="🔍 Buscar item do cardápio…"
+          style={{
+            width:'100%', boxSizing:'border-box', border:'2px solid #fff3', borderRadius:12,
+            padding:'12px 40px 12px 16px', fontSize:15, background:'rgba(255,255,255,0.08)', color:'#fff',
+            outline:'none', fontFamily:'inherit',
+          }}
+        />
+        {search && (
+          <button onClick={()=>setSearch('')} aria-label="Limpar busca" style={{
+            position:'absolute', top:'50%', right:28, transform:'translateY(-50%)',
+            background:'none', border:'none', color:'#fff8', fontSize:18, cursor:'pointer', lineHeight:1,
+          }}>×</button>
+        )}
+      </div>
+
       {/* Tabs */}
+      {!isSearching && (
       <div style={{ display:'flex', gap:8, padding:'12px 16px', overflowX:'auto' }}>
         {cats.map(c => (
-          <button key={c} onClick={()=>setCat(c)} style={{
+          <button key={c} onClick={()=>selectCat(c)} style={{
             flexShrink:0, padding:'8px 20px', borderRadius:'999px',
             border:`2px solid ${curCat===c?BRAND.orange:'#fff3'}`,
             background: curCat===c ? BRAND.orange : 'transparent',
@@ -288,9 +335,41 @@ function AddItems({ comanda, onClose }:any) {
           </button>
         ))}
       </div>
+      )}
+
+      {/* Sub-tabs: categorias do cardápio dentro do grupo selecionado */}
+      {!isSearching && subCategories.length > 0 && (
+        <div style={{ display:'flex', gap:6, padding:'0 16px 12px', overflowX:'auto' }}>
+          <button onClick={()=>setSubCat(null)} style={{
+            flexShrink:0, padding:'6px 16px', borderRadius:'999px',
+            border:`1.5px solid ${!subCat ? BRAND.yellow : '#fff3'}`,
+            background: !subCat ? BRAND.yellow : 'transparent',
+            color: !subCat ? BRAND.navy : '#fff8',
+            fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit',
+          }}>
+            Todas
+          </button>
+          {subCategories.map((sc) => (
+            <button key={sc.id} onClick={()=>setSubCat(sc.id)} style={{
+              flexShrink:0, padding:'6px 16px', borderRadius:'999px',
+              border:`1.5px solid ${subCat===sc.id ? BRAND.yellow : '#fff3'}`,
+              background: subCat===sc.id ? BRAND.yellow : 'transparent',
+              color: subCat===sc.id ? BRAND.navy : '#fff8',
+              fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit',
+            }}>
+              {sc.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Grid */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12, padding:'12px 16px', flex:1 }}>
+      {isSearching && visible.length === 0 ? (
+        <div style={{ padding:'40px 16px', textAlign:'center', color:'#fff8', fontSize:14, fontWeight:600 }}>
+          Nenhum item encontrado para "{search.trim()}"
+        </div>
+      ) : (
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, padding:'12px 16px', flex:1 }}>
         {visible.map((item:any) => {
           const inCart = cart.filter(c=>c.item.id===item.id).reduce((s:number,c:any)=>s+c.qty,0);
           return (
@@ -306,32 +385,63 @@ function AddItems({ comanda, onClose }:any) {
           );
         })}
       </div>
+      )}
 
-      {/* Cart */}
-      {cart.length > 0 && (
-        <div style={{ position:'sticky', bottom:0, background:BRAND.cream, borderRadius:'20px 20px 0 0', borderTop:`3px solid ${BRAND.navy}`, padding:'20px 16px', boxShadow:'0 -8px 40px rgba(0,0,0,.4)' }}>
-          <div style={{ fontSize:14, fontWeight:900, color:BRAND.navy, textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Pedido atual</div>
-          {cart.map((c,idx) => (
-            <div key={idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:`1px solid #e0d8d0` }}>
-              <div>
-                <div style={{ fontWeight:700, fontSize:14, color:BRAND.navy }}>{c.item.name}</div>
-                {c.notes && <div style={{ fontSize:12, color:BRAND.orange, marginTop:2 }}>📝 {c.notes}</div>}
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <button onClick={()=>setCart(p=>{const n=[...p];n[idx]={...n[idx],qty:Math.max(1,n[idx].qty-1)};return n;})} style={{ width:28,height:28,borderRadius:'50%',border:`2px solid ${BRAND.navy}`,background:'transparent',fontWeight:900,fontSize:16,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:BRAND.navy }}>−</button>
-                <span style={{ fontWeight:900, fontSize:15, color:BRAND.navy, minWidth:20, textAlign:'center' }}>{c.qty}</span>
-                <button onClick={()=>setCart(p=>{const n=[...p];n[idx]={...n[idx],qty:n[idx].qty+1};return n;})} style={{ width:28,height:28,borderRadius:'50%',border:`2px solid ${BRAND.navy}`,background:'transparent',fontWeight:900,fontSize:16,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:BRAND.navy }}>+</button>
-                <button onClick={()=>{setNoteIdx(idx);setNote(c.notes);}} style={{ background:'none',border:'none',cursor:'pointer',fontSize:16 }}>✏️</button>
-                <button onClick={()=>setCart(p=>p.filter((_,i)=>i!==idx))} style={{ background:'none',border:'none',cursor:'pointer',fontSize:16,color:BRAND.red }}>✕</button>
-              </div>
+    </div>
+
+      {/* Painel do pedido atual — lateral direita, pode ser minimizado */}
+      {cart.length > 0 && !cartMinimized && (
+        <div style={{ position:'relative', width:340, flexShrink:0, background:BRAND.cream, borderLeft:`3px solid ${BRAND.navy}`, display:'flex', flexDirection:'column' }}>
+          <button onClick={()=>setCartMinimized(true)} aria-label="Minimizar pedido" style={{
+            position:'absolute', top:'50%', left:-18, transform:'translateY(-50%)',
+            width:36, height:56, borderRadius:'10px 0 0 10px', border:`2px solid ${BRAND.navy}`, borderRight:'none',
+            background:BRAND.navy, color:BRAND.yellow, fontSize:18, fontWeight:900, cursor:'pointer',
+            display:'flex', alignItems:'center', justifyContent:'center', zIndex:10,
+          }}>›</button>
+
+          <div style={{ padding:'20px 16px 8px', flexShrink:0 }}>
+            <div style={{ fontSize:14, fontWeight:900, color:BRAND.navy, textTransform:'uppercase', letterSpacing:1 }}>
+              Pedido atual ({cartCount})
             </div>
-          ))}
-          <div style={{ marginTop:16, textAlign:'center' }}>
+          </div>
+
+          <div style={{ flex:1, overflowY:'auto', padding:'0 16px' }}>
+            {cart.map((c,idx) => (
+              <div key={idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:`1px solid #e0d8d0` }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:14, color:BRAND.navy }}>{c.item.name}</div>
+                  {c.notes && <div style={{ fontSize:12, color:BRAND.orange, marginTop:2 }}>📝 {c.notes}</div>}
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <button onClick={()=>setCart(p=>{const n=[...p];n[idx]={...n[idx],qty:Math.max(1,n[idx].qty-1)};return n;})} style={{ width:28,height:28,borderRadius:'50%',border:`2px solid ${BRAND.navy}`,background:'transparent',fontWeight:900,fontSize:16,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:BRAND.navy }}>−</button>
+                  <span style={{ fontWeight:900, fontSize:15, color:BRAND.navy, minWidth:20, textAlign:'center' }}>{c.qty}</span>
+                  <button onClick={()=>setCart(p=>{const n=[...p];n[idx]={...n[idx],qty:n[idx].qty+1};return n;})} style={{ width:28,height:28,borderRadius:'50%',border:`2px solid ${BRAND.navy}`,background:'transparent',fontWeight:900,fontSize:16,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:BRAND.navy }}>+</button>
+                  <button onClick={()=>{setNoteIdx(idx);setNote(c.notes);}} style={{ background:'none',border:'none',cursor:'pointer',fontSize:16 }}>✏️</button>
+                  <button onClick={()=>setCart(p=>p.filter((_,i)=>i!==idx))} style={{ background:'none',border:'none',cursor:'pointer',fontSize:16,color:BRAND.red }}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ padding:'12px 16px 20px', borderTop:'2px solid #e0d8d0', flexShrink:0 }}>
             <PillBtn onClick={send} disabled={sending}>
-              {sending ? 'Enviando…' : `Enviar (${cart.reduce((s,c)=>s+c.qty,0)} itens)`}
+              {sending ? 'Enviando…' : `Enviar (${cartCount} itens)`}
             </PillBtn>
           </div>
         </div>
+      )}
+
+      {/* Aba flutuante para reabrir o pedido quando minimizado */}
+      {cart.length > 0 && cartMinimized && (
+        <button onClick={()=>setCartMinimized(false)} aria-label="Expandir pedido" style={{
+          position:'fixed', top:'50%', right:0, transform:'translateY(-50%)',
+          background:BRAND.orange, color:'#fff', border:'none', borderRadius:'12px 0 0 12px',
+          padding:'16px 10px', fontWeight:900, fontSize:14, cursor:'pointer',
+          boxShadow:'-4px 0 16px rgba(0,0,0,.3)', display:'flex', flexDirection:'column', alignItems:'center', gap:6, zIndex:50,
+        }}>
+          <span style={{ fontSize:20 }}>🛒</span>
+          <span>{cartCount}</span>
+        </button>
       )}
 
       {/* Opções vinculadas ao item */}
@@ -400,7 +510,23 @@ function AddItems({ comanda, onClose }:any) {
   );
 }
 
+function CloseButton({ onClick }:{ onClick:()=>void }) {
+  return (
+    <button onClick={onClick} aria-label="Voltar para a tela inicial" style={{
+      position:'fixed', top:16, right:16, zIndex:500,
+      width:48, height:48, borderRadius:'50%',
+      background:'rgba(13,27,42,0.85)', border:`2px solid ${BRAND.yellow}`,
+      color:BRAND.yellow, fontSize:26, fontWeight:900, lineHeight:1, cursor:'pointer',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      boxShadow:'0 4px 16px rgba(0,0,0,.35)',
+    }}>
+      ×
+    </button>
+  );
+}
+
 export default function Garcom() {
+  const navigate = useNavigate();
   const [view, setView] = useState<'tables' | 'table' | 'order'>('tables');
   const [selectedTable, setSelectedTable]     = useState<any>(null);
   const [selectedComanda, setSelectedComanda] = useState<any>(null);
@@ -419,11 +545,15 @@ export default function Garcom() {
     setView('order');
   }
 
-  if (view === 'order' && selectedComanda) {
-    return <AddItems comanda={selectedComanda} onClose={() => setView('table')} />;
-  }
-  if (view === 'table' && selectedTable) {
-    return <TableComandasScreen table={selectedTable} onBack={goToTables} onOpenOrder={openOrder} />;
-  }
-  return <TablesScreen onSelect={goToTable} />;
+  const screen =
+    view === 'order' && selectedComanda ? <AddItems comanda={selectedComanda} onClose={() => setView('table')} /> :
+    view === 'table' && selectedTable   ? <TableComandasScreen table={selectedTable} onBack={goToTables} onOpenOrder={openOrder} /> :
+    <TablesScreen onSelect={goToTable} />;
+
+  return (
+    <>
+      {screen}
+      <CloseButton onClick={() => navigate('/')} />
+    </>
+  );
 }

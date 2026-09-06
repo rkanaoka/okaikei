@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { reasonsApi } from '@/services/api';
 import { BRAND, fmtBRL, fmtDate, Card, PageHeader, Btn, TableHead } from './shared';
+import CurrencyInput from '@/components/CurrencyInput';
 
 export default function MotivosDesconto() {
   const [reasons, setReasons] = useState<any[]>([]);
@@ -65,10 +66,17 @@ export default function MotivosDesconto() {
               </div>
               <div style={{ flex:1 }}>
                 <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#666', marginBottom:5 }}>Valor</label>
-                <input type="number" min="0" step="0.01" value={form.value} onChange={e => setForm({ ...form, value:e.target.value })}
-                  placeholder={form.type === 'percent' ? '10' : '5.00'}
-                  style={{ width:'100%', boxSizing:'border-box', border:'1.5px solid #dde', borderRadius:8,
-                    padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }} />
+                {form.type === 'percent' ? (
+                  <input type="number" min="0" max={100} step="0.01" value={form.value} onChange={e => setForm({ ...form, value:e.target.value })}
+                    placeholder="10"
+                    style={{ width:'100%', boxSizing:'border-box', border:'1.5px solid #dde', borderRadius:8,
+                      padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }} />
+                ) : (
+                  <CurrencyInput value={form.value} onChange={v => setForm({ ...form, value:v })}
+                    placeholder="5.00"
+                    style={{ width:'100%', boxSizing:'border-box', border:'1.5px solid #dde', borderRadius:8,
+                      padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }} />
+                )}
               </div>
             </div>
             {err && <p style={{ color:BRAND.red, fontSize:13, margin:'0 0 12px' }}>{err}</p>}

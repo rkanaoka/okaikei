@@ -3,6 +3,7 @@ import { menuApi, optionGroupsApi } from '@/services/api';
 import { BRAND, fmtBRL, PRINT_CAT_LABELS, Card, PageHeader, Btn, TableHead } from './shared';
 import CardapioOpcoes from './CardapioOpcoes';
 import OptionGroupEditModal from './OptionGroupEditModal';
+import CurrencyInput from '@/components/CurrencyInput';
 
 const DAYS = [
   { v: 0, l: 'Dom' }, { v: 1, l: 'Seg' }, { v: 2, l: 'Ter' }, { v: 3, l: 'Qua' },
@@ -204,11 +205,19 @@ export default function Cardapio() {
                 ].map(f => (
                   <div key={f.key} style={{ marginBottom:14 }}>
                     <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#666', marginBottom:5 }}>{f.label}</label>
-                    <input type={f.type} value={form[f.key]??''} placeholder={f.placeholder}
-                      onChange={e => setForm({...form, [f.key]:e.target.value})}
-                      style={{ width:'100%', boxSizing:'border-box', border:'1.5px solid #dde', borderRadius:8,
-                        padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }}
-                    />
+                    {f.key === 'price' ? (
+                      <CurrencyInput value={form[f.key]??''} placeholder={f.placeholder}
+                        onChange={v => setForm({...form, [f.key]:v})}
+                        style={{ width:'100%', boxSizing:'border-box', border:'1.5px solid #dde', borderRadius:8,
+                          padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }}
+                      />
+                    ) : (
+                      <input type={f.type} value={form[f.key]??''} placeholder={f.placeholder}
+                        onChange={e => setForm({...form, [f.key]:e.target.value})}
+                        style={{ width:'100%', boxSizing:'border-box', border:'1.5px solid #dde', borderRadius:8,
+                          padding:'10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }}
+                      />
+                    )}
                   </div>
                 ))}
 

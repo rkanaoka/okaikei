@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { vouchersApi, menuApi } from '@/services/api';
 import { BRAND, fmtBRL, fmtDate, Card, PageHeader, Btn, TableHead } from './shared';
+import CurrencyInput from '@/components/CurrencyInput';
 
 const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -231,9 +232,15 @@ export default function Vouchers() {
               </div>
               <div style={{ flex:1 }}>
                 <label style={labelStyle}>{form.discountType === 'percent' ? 'Percentual (%)' : 'Valor (R$)'}</label>
-                <input type="number" min="0" max={form.discountType === 'percent' ? 100 : undefined} step="0.01" value={form.amount}
-                  onChange={e => setForm({ ...form, amount:e.target.value })}
-                  placeholder={form.discountType === 'percent' ? '10' : '100.00'} style={inputStyle} />
+                {form.discountType === 'percent' ? (
+                  <input type="number" min="0" max={100} step="0.01" value={form.amount}
+                    onChange={e => setForm({ ...form, amount:e.target.value })}
+                    placeholder="10" style={inputStyle} />
+                ) : (
+                  <CurrencyInput value={form.amount}
+                    onChange={v => setForm({ ...form, amount:v })}
+                    placeholder="100.00" style={inputStyle} />
+                )}
               </div>
               <div style={{ flex:1 }}>
                 <label style={labelStyle}>Status</label>
@@ -268,8 +275,8 @@ export default function Vouchers() {
             <div style={{ display:'flex', gap:10, marginBottom:14 }}>
               <div style={{ flex:1 }}>
                 <label style={labelStyle}>Pedido mínimo (R$, opcional)</label>
-                <input type="number" min="0" step="0.01" value={form.minOrderValue}
-                  onChange={e => setForm({ ...form, minOrderValue:e.target.value })} placeholder="Sem mínimo" style={inputStyle} />
+                <CurrencyInput value={form.minOrderValue}
+                  onChange={v => setForm({ ...form, minOrderValue:v })} placeholder="Sem mínimo" style={inputStyle} />
               </div>
               <div style={{ flex:1 }}>
                 <label style={labelStyle}>Vencimento{form.status === 'RECURRING' ? ' (opcional)' : ''}</label>

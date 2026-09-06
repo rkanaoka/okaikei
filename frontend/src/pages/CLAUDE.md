@@ -20,3 +20,4 @@ Páginas raiz da aplicação. Cada arquivo corresponde a uma rota definida em `A
 - Pages são default exports sem props obrigatórias
 - Dados sempre via `../services/api.ts` ou `../hooks/useSocket.ts`
 - Não redirecionar de dentro da page — use `<Navigate>` no `App.tsx`
+- Campos de valor em R$ → `../components/CurrencyInput.tsx` (ver `components/CLAUDE.md`), nunca `<input type="number">` puro

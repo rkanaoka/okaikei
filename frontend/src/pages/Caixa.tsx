@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { comandasApi, reasonsApi, menuApi, tablesApi, vouchersApi, garconsApi } from '@/services/api';
+import CurrencyInput from '@/components/CurrencyInput';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653', navyLight:'#1A2E44', cream:'#FFF8F0' };
 const fmtBRL = (v:any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
@@ -66,9 +67,15 @@ function GratuityControl({ surcharge, onChange }: { surcharge: { type:'percent'|
             <option value="percent">%</option>
             <option value="fixed">R$ fixo</option>
           </select>
-          <input type="number" min="0" step="0.01" value={surcharge.value}
-            onChange={e=>onChange({ type:surcharge.type, value:e.target.value })}
-            style={{ width:90, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px', fontSize:14, fontWeight:700, outline:'none' }} />
+          {surcharge.type === 'fixed' ? (
+            <CurrencyInput value={surcharge.value}
+              onChange={v=>onChange({ type:surcharge.type, value:v })}
+              style={{ width:90, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px', fontSize:14, fontWeight:700, outline:'none' }} />
+          ) : (
+            <input type="number" min="0" step="0.01" value={surcharge.value}
+              onChange={e=>onChange({ type:surcharge.type, value:e.target.value })}
+              style={{ width:90, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px', fontSize:14, fontWeight:700, outline:'none' }} />
+          )}
         </div>
       )}
     </div>
@@ -145,6 +152,8 @@ export default function Caixa() {
   const [showAddItems, setShowAddItems]     = useState(false);
   const [menuItems, setMenuItems]           = useState<any[]>([]);
   const [addCat, setAddCat]                 = useState<string|null>(null);
+  const [addSubCat, setAddSubCat]           = useState<string|null>(null);
+  const [addSearch, setAddSearch]           = useState('');
   const [addCart, setAddCart]               = useState<{ item:any; qty:number; notes:string }[]>([]);
   const [askPrint, setAskPrint]             = useState(false);
   const [addingItems, setAddingItems]       = useState(false);
@@ -200,7 +209,26 @@ export default function Caixa() {
 
   const addCategories = [...new Set(menuItems.map((i:any) => i.category))] as string[];
   const addCurCat     = addCat ?? addCategories[0];
-  const addVisible    = menuItems.filter((i:any) => i.category === addCurCat && i.available);
+
+  function selectAddCat(c: string) {
+    setAddCat(c);
+    setAddSubCat(null);
+  }
+
+  // Submenu de categorias do cardápio dentro do grupo Cozinha/Bar selecionado.
+  const addSubCategories = (() => {
+    const byId = new Map<string, { id:string; name:string; sortOrder:number }>();
+    menuItems
+      .filter((i:any) => i.category === addCurCat && i.available && i.menuCategory)
+      .forEach((i:any) => { if (!byId.has(i.menuCategory.id)) byId.set(i.menuCategory.id, i.menuCategory); });
+    return [...byId.values()].sort((a,b) => a.sortOrder - b.sortOrder);
+  })();
+
+  // Busca global: ignora categoria/subcategoria e procura em Cozinha + Bar + Caixa.
+  const isAddSearching = addSearch.trim().length > 0;
+  const addVisible = isAddSearching
+    ? menuItems.filter((i:any) => i.available && i.name.toLowerCase().includes(addSearch.trim().toLowerCase()))
+    : menuItems.filter((i:any) => i.category === addCurCat && i.available && (!addSubCat || i.categoryId === addSubCat));
 
   const subtotal   = (comanda?.items ?? []).reduce((s:number,i:any) => s + i.quantity * parseFloat(i.unitPrice), 0);
   const discRaw    = discount.type === 'percent' ? subtotal * (parseFloat(discount.value)||0) / 100 : (parseFloat(discount.value)||0);
@@ -288,6 +316,8 @@ export default function Caixa() {
     setAddCart([]);
     setAddItemsError('');
     setAskPrint(false);
+    setAddSubCat(null);
+    setAddSearch('');
     if (!menuItems.length) menuApi.list().then((d:any) => setMenuItems(d)).catch(()=>{});
   }
 
@@ -738,9 +768,15 @@ export default function Caixa() {
                       <option value="fixed">R$</option>
                       <option value="percent">%</option>
                     </select>
-                    <input type="number" min="0" step="0.01" value={discount.value}
-                      onChange={e=>{ setDiscount(d=>({ ...d, value:e.target.value })); setDiscountReasonId(''); }}
-                      style={{ width:80, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px', fontSize:14, fontWeight:700, outline:'none' }} />
+                    {discount.type === 'fixed' ? (
+                      <CurrencyInput value={discount.value}
+                        onChange={v=>{ setDiscount(d=>({ ...d, value:v })); setDiscountReasonId(''); }}
+                        style={{ width:80, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px', fontSize:14, fontWeight:700, outline:'none' }} />
+                    ) : (
+                      <input type="number" min="0" step="0.01" value={discount.value}
+                        onChange={e=>{ setDiscount(d=>({ ...d, value:e.target.value })); setDiscountReasonId(''); }}
+                        style={{ width:80, textAlign:'right', border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px', fontSize:14, fontWeight:700, outline:'none' }} />
+                    )}
                   </div>
                 </div>
                 {discountReasons.length > 0 && (
@@ -847,8 +883,8 @@ export default function Caixa() {
                   {(Object.keys(PAY_LABELS) as PayMethod[]).map(m => <option key={m} value={m}>{PAY_LABELS[m]}</option>)}
                 </select>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <input type="number" min="0" step="0.01" value={p.amount}
-                    onChange={e=>updatePayment(idx,'amount',e.target.value)}
+                  <CurrencyInput value={p.amount}
+                    onChange={v=>updatePayment(idx,'amount',v)}
                     placeholder="0,00"
                     style={{ width:90, border:`2px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px', fontWeight:700, fontSize:14, textAlign:'right', outline:'none' }} />
                   <button onClick={()=>fillRemaining(idx)} title="Completar restante"
@@ -959,7 +995,7 @@ export default function Caixa() {
       {showAddItems && (
         <div style={{ position:'fixed', inset:0, background:'rgba(13,27,42,.85)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:160 }}
           onClick={e=>{ if (e.target === e.currentTarget && !askPrint) setShowAddItems(false); }}>
-          <div style={{ background:BRAND.cream, borderRadius:'24px 24px 0 0', borderTop:`3px solid ${BRAND.navy}`, padding:'24px 20px 40px', width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
+          <div style={{ background:BRAND.cream, borderRadius:'24px 24px 0 0', borderTop:`3px solid ${BRAND.navy}`, padding:'24px 20px 40px', width:'100%', maxWidth:960, maxHeight:'85vh', overflowY:'auto' }}>
             {!askPrint ? (
               <>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
@@ -967,9 +1003,25 @@ export default function Caixa() {
                   <button onClick={()=>setShowAddItems(false)} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:BRAND.navy }}>✕</button>
                 </div>
 
-                <div style={{ display:'flex', gap:8, marginBottom:14, overflowX:'auto' }}>
+                <div style={{ position:'relative', marginBottom:14 }}>
+                  <input
+                    value={addSearch}
+                    onChange={e=>setAddSearch(e.target.value)}
+                    placeholder="🔍 Buscar item do cardápio…"
+                    style={{ width:'100%', boxSizing:'border-box', border:'1.5px solid #ddd', borderRadius:8, padding:'10px 36px 10px 12px', fontSize:14, outline:'none', fontFamily:'inherit' }}
+                  />
+                  {addSearch && (
+                    <button onClick={()=>setAddSearch('')} aria-label="Limpar busca" style={{
+                      position:'absolute', top:'50%', right:10, transform:'translateY(-50%)',
+                      background:'none', border:'none', color:'#999', fontSize:18, cursor:'pointer', lineHeight:1,
+                    }}>×</button>
+                  )}
+                </div>
+
+                {!isAddSearching && (
+                <div style={{ display:'flex', gap:8, marginBottom:8, overflowX:'auto' }}>
                   {addCategories.map((c:string) => (
-                    <button key={c} onClick={()=>setAddCat(c)} style={{
+                    <button key={c} onClick={()=>selectAddCat(c)} style={{
                       flexShrink:0, padding:'8px 16px', borderRadius:999, cursor:'pointer', fontWeight:700, fontSize:13, fontFamily:'inherit',
                       border:`2px solid ${addCurCat===c ? BRAND.orange : '#ddd'}`,
                       background: addCurCat===c ? BRAND.orange : '#fff',
@@ -979,8 +1031,32 @@ export default function Caixa() {
                     </button>
                   ))}
                 </div>
+                )}
 
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginBottom:16 }}>
+                {!isAddSearching && addSubCategories.length > 0 && (
+                  <div style={{ display:'flex', gap:6, marginBottom:14, overflowX:'auto' }}>
+                    <button onClick={()=>setAddSubCat(null)} style={{
+                      flexShrink:0, padding:'6px 14px', borderRadius:999, cursor:'pointer', fontWeight:700, fontSize:12, fontFamily:'inherit',
+                      border:`1.5px solid ${!addSubCat ? BRAND.navy : '#ddd'}`,
+                      background: !addSubCat ? BRAND.navy : '#fff',
+                      color:       !addSubCat ? BRAND.yellow : '#666',
+                    }}>
+                      Todas
+                    </button>
+                    {addSubCategories.map((sc:any) => (
+                      <button key={sc.id} onClick={()=>setAddSubCat(sc.id)} style={{
+                        flexShrink:0, padding:'6px 14px', borderRadius:999, cursor:'pointer', fontWeight:700, fontSize:12, fontFamily:'inherit',
+                        border:`1.5px solid ${addSubCat===sc.id ? BRAND.navy : '#ddd'}`,
+                        background: addSubCat===sc.id ? BRAND.navy : '#fff',
+                        color:       addSubCat===sc.id ? BRAND.yellow : '#666',
+                      }}>
+                        {sc.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
                   {addVisible.map((item:any) => {
                     const inCart = addCart.filter(c => c.item.id === item.id).reduce((s,c) => s+c.qty, 0);
                     return (
@@ -994,7 +1070,11 @@ export default function Caixa() {
                       </button>
                     );
                   })}
-                  {!addVisible.length && <p style={{ color:'#aaa', fontSize:13 }}>Nenhum item disponível nesta categoria</p>}
+                  {!addVisible.length && (
+                    <p style={{ color:'#aaa', fontSize:13, gridColumn:'1 / -1' }}>
+                      {isAddSearching ? `Nenhum item encontrado para "${addSearch.trim()}"` : 'Nenhum item disponível nesta categoria'}
+                    </p>
+                  )}
                 </div>
 
                 {addCart.length > 0 && (

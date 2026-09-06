@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { optionGroupsApi } from '@/services/api';
 import { BRAND, Btn } from './shared';
+import CurrencyInput from '@/components/CurrencyInput';
 
 // Modal de criação/edição de um Grupo de Opções — usado tanto em CardapioOpcoes
 // (tela "Itens do Cardápio > Opções") quanto na aba "Opções" da edição de um item.
@@ -97,8 +98,8 @@ export default function OptionGroupEditModal({ initial, onClose, onSaved, zIndex
                 onChange={e => updateOptionField(idx, 'name', e.target.value)}
                 style={{ flex:1, boxSizing:'border-box', border:'1.5px solid #dde', borderRadius:8,
                   padding:'8px 10px', fontSize:13, outline:'none', fontFamily:'inherit' }} />
-              <input type="number" value={o.price} placeholder="0.00" step="0.01"
-                onChange={e => updateOptionField(idx, 'price', e.target.value)}
+              <CurrencyInput value={o.price} placeholder="0.00"
+                onChange={v => updateOptionField(idx, 'price', v)}
                 style={{ width:100, boxSizing:'border-box', border:'1.5px solid #dde', borderRadius:8,
                   padding:'8px 10px', fontSize:13, outline:'none', fontFamily:'inherit' }} />
               <button type="button" onClick={() => removeOption(idx)}

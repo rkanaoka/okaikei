@@ -28,6 +28,7 @@ montado pelo shell `Admin.tsx` via roteamento interno (sidebar).
 - Importar sempre de `./shared` para componentes e constantes comuns
 - Cada componente é default export e recebe zero props (dados via API)
 - Dados sempre via `services/api.ts` — nunca hardcoded
+- Campos de valor em R$ → `@/components/CurrencyInput.tsx` (ver `components/CLAUDE.md`), nunca `<input type="number">` puro
 
 ## Adicionar nova seção
 1. Criar `NomeSecao.tsx` nesta pasta
