@@ -96,9 +96,9 @@ export default function MesasComandas() {
 
       {form && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center' }}>
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:420, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', margin:'auto 0' }}>
             <h2 style={{ margin:'0 0 20px', fontSize:18, fontWeight:900, color:BRAND.navy }}>
               {form.id ? 'Editar Mesa' : 'Nova Mesa'}
             </h2>
@@ -141,10 +141,10 @@ export default function MesasComandas() {
 
       {qrTarget && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center' }}
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}
           onClick={e => { if (e.target === e.currentTarget) { setQrTarget(null); setQrDataUrl(''); } }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:360, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)', textAlign:'center' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', textAlign:'center', margin:'auto 0' }}>
             <h2 style={{ margin:'0 0 4px', fontSize:18, fontWeight:900, color:BRAND.navy }}>{qrTarget.label}</h2>
             <p style={{ margin:'0 0 20px', fontSize:12, color:'#888' }}>
               Aponte a câmera pra abrir o cardápio já vinculado a esta mesa

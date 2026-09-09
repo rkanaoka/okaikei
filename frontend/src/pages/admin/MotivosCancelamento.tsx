@@ -39,9 +39,9 @@ export default function MotivosCancelamento() {
 
       {form && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center' }}>
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:420, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', margin:'auto 0' }}>
             <h2 style={{ margin:'0 0 20px', fontSize:18, fontWeight:900, color:BRAND.navy }}>Novo Motivo de Cancelamento</h2>
             <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#666', marginBottom:5 }}>Nome do motivo</label>
             <input value={form.label} onChange={e => setForm({ label:e.target.value })} placeholder="Ex: Item errado"

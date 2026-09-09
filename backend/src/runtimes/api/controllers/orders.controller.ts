@@ -86,6 +86,7 @@ export class OrdersController {
       discountType?:   string;
       discountValue?:  number;
       voucherId?:      string;
+      partnershipId?:  string;
       closedByGarcomId?: string;
       discountReasonId?: string;
       payments: Array<{ method: PaymentMethod; amount: number; notes?: string }>;

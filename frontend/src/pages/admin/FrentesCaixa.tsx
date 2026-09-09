@@ -124,10 +124,10 @@ export default function FrentesCaixa() {
         const hasDivergence = !!div?.hasDivergence;
         return (
           <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-            display:'flex', alignItems:'center', justifyContent:'center' }}
+            display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}
             onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>
             <div style={{ background:'#fff', borderRadius:16, padding:32, width:560, maxWidth:'92vw',
-              boxShadow:'0 20px 60px rgba(0,0,0,.25)', maxHeight:'90vh', overflowY:'auto' }}>
+              boxShadow:'0 20px 60px rgba(0,0,0,.25)', maxHeight:'90vh', overflowY:'auto', margin:'auto 0' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
                 <div>
                   <h2 style={{ margin:0, fontSize:18, fontWeight:900, color:BRAND.navy }}>Detalhes do Caixa</h2>

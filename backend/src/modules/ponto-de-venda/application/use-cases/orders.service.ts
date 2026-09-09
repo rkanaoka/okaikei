@@ -241,6 +241,7 @@ export class OrdersService {
     discountType?:   string;
     discountValue?:  number;
     voucherId?:      string;
+    partnershipId?:  string;
     closedByGarcomId?: string;
     discountReasonId?: string;
     payments: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
@@ -278,12 +279,22 @@ export class OrdersService {
       voucherDiscount = this.computeVoucherDiscount(voucher, comanda.items, subtotal);
     }
 
+    let partnershipDiscount = 0;
+    let partnership: any     = null;
+    if (dto.partnershipId) {
+      partnership = await this.repo.findPartnershipById(dto.partnershipId);
+      if (!partnership) throw new BadRequestException('Parceria não encontrada');
+      this.assertPartnershipUsable(partnership);
+      partnershipDiscount = this.computePartnershipDiscount(partnership, comanda.items, subtotal);
+    }
+
     let total = subtotal;
     const sv = dto.surchargeValue ?? 0;
     const dv = dto.discountValue  ?? 0;
     if (sv > 0 && dto.surchargeType) total += dto.surchargeType === 'percent' ? serviceFeeBase * sv / 100 : sv;
     if (dv > 0 && dto.discountType)  total -= dto.discountType  === 'percent' ? subtotal       * dv / 100 : dv;
     if (voucherDiscount > 0) total -= voucherDiscount;
+    if (partnershipDiscount > 0) total -= partnershipDiscount;
     total = Math.max(0, total);
 
     const paid = dto.payments.reduce((s, p) => s + p.amount, 0);
@@ -304,6 +315,8 @@ export class OrdersService {
           discountValue:  dto.discountValue  ?? 0,
           voucherCode:    voucher?.code       ?? null,
           voucherDiscount,
+          partnershipCode:     partnership?.code ?? null,
+          partnershipDiscount,
           closedByGarcomId: dto.closedByGarcomId ?? null,
           discountReasonId: dto.discountReasonId ?? null,
         },
@@ -366,6 +379,71 @@ export class OrdersService {
     return Math.max(0, Math.min(subtotal, raw));
   }
 
+  /** Confere se a parceria pode ser usada agora: ativa, dentro da validade e das condições de uso. */
+  private assertPartnershipUsable(p: any) {
+    if (!p.active) throw new BadRequestException('Esta parceria está inativa');
+    const now = new Date();
+    if (p.startDate && now < new Date(p.startDate)) throw new BadRequestException('Esta parceria ainda não iniciou');
+    if (p.endDate) {
+      const end = new Date(p.endDate);
+      end.setHours(23, 59, 59, 999);
+      if (now > end) throw new BadRequestException('Esta parceria está expirada');
+    }
+    if (p.validDaysOfWeek?.length > 0 && !p.validDaysOfWeek.includes(now.getDay())) {
+      throw new BadRequestException('Esta parceria não é válida hoje');
+    }
+    if (p.startTime && p.endTime) {
+      const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (hhmm < p.startTime || hhmm > p.endTime) {
+        throw new BadRequestException(`Esta parceria só é válida das ${p.startTime} às ${p.endTime}`);
+      }
+    }
+  }
+
+  /** Soma o desconto de cada cupom ativo da parceria — cada cupom é avaliado
+   * independentemente contra os itens do pedido. */
+  private computePartnershipDiscount(partnership: any, items: any[], subtotal: number): number {
+    let total = 0;
+    for (const coupon of partnership.coupons ?? []) {
+      if (!coupon.active) continue;
+      total += this.computeCouponDiscount(coupon, items, subtotal);
+    }
+    return Math.max(0, Math.min(subtotal, total));
+  }
+
+  // "2 por 1": desconta o valor de 1 unidade quando há 2+ no pedido — uma
+  // única vez por pedido, independente da quantidade total (não é por par).
+  private computeCouponDiscount(coupon: any, items: any[], subtotal: number): number {
+    switch (coupon.type) {
+      case 'TWO_FOR_ONE_ITEM': {
+        const matching = items.filter((i: any) => i.menuItemId === coupon.menuItemId);
+        const qty = matching.reduce((s: number, i: any) => s + i.quantity, 0);
+        if (qty < 2) return 0;
+        return Number(matching[0]?.unitPrice ?? 0);
+      }
+      case 'TWO_FOR_ONE_CATEGORY': {
+        const matching = items.filter((i: any) => i.menuItem?.categoryId === coupon.categoryId);
+        const qty = matching.reduce((s: number, i: any) => s + i.quantity, 0);
+        if (qty < 2) return 0;
+        return Math.min(...matching.map((i: any) => Number(i.unitPrice)));
+      }
+      case 'ITEM_DISCOUNT': {
+        const found = items.find((i: any) => i.menuItemId === coupon.menuItemId);
+        if (!found) return 0;
+        const base = Number(found.unitPrice);
+        const raw = coupon.discountType === 'percent' ? (base * Number(coupon.amount)) / 100 : Math.min(base, Number(coupon.amount));
+        return Math.max(0, raw);
+      }
+      case 'ORDER_DISCOUNT': {
+        if (coupon.minOrderValue != null && subtotal < Number(coupon.minOrderValue)) return 0;
+        const raw = coupon.discountType === 'percent' ? (subtotal * Number(coupon.amount)) / 100 : Number(coupon.amount);
+        return Math.max(0, raw);
+      }
+      default:
+        return 0;
+    }
+  }
+
   private serviceFeeBase(items: any[]): number {
     return (items ?? []).reduce((s: number, i: any) => {
       return (i.menuItem?.chargeServiceFee !== false) ? s + Number(i.unitPrice) * i.quantity : s;
@@ -379,9 +457,11 @@ export class OrdersService {
     const sv = Number(comanda.surchargeValue ?? 0);
     const dv = Number(comanda.discountValue  ?? 0);
     const vv = Number(comanda.voucherDiscount ?? 0);
+    const pv = Number(comanda.partnershipDiscount ?? 0);
     if (sv > 0 && comanda.surchargeType) total += comanda.surchargeType === 'percent' ? serviceFeeBase * sv / 100 : sv;
     if (dv > 0 && comanda.discountType)  total -= comanda.discountType  === 'percent' ? subtotal       * dv / 100 : dv;
     if (vv > 0) total -= vv;
+    if (pv > 0) total -= pv;
     return { ...comanda, subtotal, total: Math.max(0, total), serviceFeeBase };
   }
 }

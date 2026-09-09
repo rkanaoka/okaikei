@@ -105,6 +105,7 @@ export const comandasApi = {
     surchargeType?: string; surchargeValue?: number;
     discountType?:  string; discountValue?:  number;
     voucherId?:     string;
+    partnershipId?: string;
     closedByGarcomId?: string;
     discountReasonId?: string;
     payments: Array<{ method: string; amount: number }>;
@@ -162,6 +163,45 @@ export const vouchersApi = {
   // Vouchers RECURRING: aplica sem senha, apenas checa validade
   useRecurring: (id: string) => http.post(`/vouchers/${id}/use-recurring`, {}),
   usageHistory: () => http.get('/vouchers/usage-history'),
+};
+
+// ── Parcerias (cupons de empresas parceiras) ────────────────────────────────────
+export type CouponType = 'TWO_FOR_ONE_ITEM' | 'TWO_FOR_ONE_CATEGORY' | 'ITEM_DISCOUNT' | 'ORDER_DISCOUNT';
+
+export type PartnershipCouponInput = {
+  id?: string;
+  type: CouponType;
+  menuItemId?: string | null;
+  categoryId?: string | null;
+  discountType?: 'fixed' | 'percent' | null;
+  amount?: number | null;
+  minOrderValue?: number | null;
+  active?: boolean;
+};
+
+export type PartnershipInput = {
+  name: string;
+  description?: string;
+  responsible?: string;
+  contact?: string;
+  cnpj?: string;
+  code: string;
+  startDate?: string;
+  endDate?: string;
+  validDaysOfWeek?: number[];
+  startTime?: string;
+  endTime?: string;
+  active?: boolean;
+  coupons: PartnershipCouponInput[];
+};
+
+export const partnershipsApi = {
+  list:   ()       => http.get('/partnerships'),
+  create: (d: PartnershipInput) => http.post('/partnerships', d),
+  update: (id: string, d: Partial<PartnershipInput>) => http.put(`/partnerships/${id}`, d),
+  remove: (id: string) => http.delete(`/partnerships/${id}`),
+
+  getByCode: (code: string) => http.get(`/partnerships/by-code/${encodeURIComponent(code)}`),
 };
 
 // ── Garçons ──────────────────────────────────────────────────────────────────

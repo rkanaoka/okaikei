@@ -54,6 +54,9 @@ export interface OrdersRepositoryPort {
   findVoucherById(id: string): Promise<any | null>;
   findVoucherByCode(code: string): Promise<any | null>;
 
+  // Parcerias
+  findPartnershipById(id: string): Promise<any | null>;
+
   // Garçons
   findGarcomById(id: string): Promise<any | null>;
 

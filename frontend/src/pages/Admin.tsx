@@ -13,10 +13,12 @@ import AcertoGarcons        from './admin/AcertoGarcons';
 import FrentesCaixa         from './admin/FrentesCaixa';
 import ItensVendidos        from './admin/ItensVendidos';
 import Faturamento          from './admin/Faturamento';
+import Pedidos              from './admin/Pedidos';
 import TempoStatus          from './admin/TempoStatus';
 import MotivosCancelamento  from './admin/MotivosCancelamento';
 import MotivosDesconto      from './admin/MotivosDesconto';
 import Vouchers             from './admin/Vouchers';
+import Parcerias            from './admin/Parcerias';
 import ModelosImpressao     from './admin/ModelosImpressao';
 import ConfigLoja           from './admin/ConfigLoja';
 import GerarEtiquetas       from './admin/GerarEtiquetas';
@@ -28,8 +30,8 @@ type SectionId =
   | 'dashboard'
   | 'cardapio' | 'cardapio-categorias'
   | 'fin-pagamentos' | 'fin-gorjetas' | 'fin-frentes-caixa'
-  | 'rel-clientes'   | 'rel-cupons'
-  | 'rel-itens'      | 'rel-faturamento' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
+  | 'rel-clientes'   | 'rel-cupons' | 'rel-parcerias'
+  | 'rel-itens'      | 'rel-faturamento' | 'rel-pedidos' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
   | 'estoque-etiquetas'
   | 'config-loja'    | 'config-horarios' | 'config-fiscal'
   | 'config-cancelamento' | 'config-desconto' | 'config-impressao' | 'config-usuarios' | 'config-garcons' | 'config-mesas';
@@ -50,12 +52,14 @@ const NAV: Array<
     { id:'fin-frentes-caixa', label:'Frentes de Caixa' },
   ]},
   { type:'group', label:'Relacionamentos', icon:'👥', permission:'relacionamentos', items:[
-    { id:'rel-clientes', label:'Cadastro de clientes' },
-    { id:'rel-cupons',   label:'Vouchers' },
+    { id:'rel-clientes',  label:'Cadastro de clientes' },
+    { id:'rel-cupons',    label:'Vouchers' },
+    { id:'rel-parcerias', label:'Parcerias' },
   ]},
   { type:'group', label:'Relatórios', icon:'📈', permission:'relatorios', items:[
     { id:'rel-itens',              label:'Itens vendidos' },
     { id:'rel-faturamento',        label:'Faturamento por dia' },
+    { id:'rel-pedidos',            label:'Pedidos' },
     { id:'rel-tempo',              label:'Tempo por status' },
     { id:'rel-faturamento-notion', label:'Importar Faturamento (Notion)' },
     { id:'rel-extrato-notion',     label:'Importar Extrato Bancário (Notion)' },
@@ -87,8 +91,10 @@ function renderSection(id: SectionId) {
     case 'fin-frentes-caixa':   return <FrentesCaixa />;
     case 'rel-clientes':        return <EmptyPlaceholder icon="👤" title="Cadastro de Clientes" subtitle="Módulo em desenvolvimento" />;
     case 'rel-cupons':          return <Vouchers />;
+    case 'rel-parcerias':       return <Parcerias />;
     case 'rel-itens':           return <ItensVendidos />;
     case 'rel-faturamento':     return <Faturamento />;
+    case 'rel-pedidos':         return <Pedidos />;
     case 'rel-tempo':           return <TempoStatus />;
     case 'rel-faturamento-notion': return (
       <div style={{ textAlign:'center', padding:'80px 40px' }}>

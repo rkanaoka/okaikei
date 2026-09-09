@@ -8,6 +8,9 @@ export default function Categorias() {
   const [form, setForm]             = useState<{ id?:string; name:string; sortOrder:string } | null>(null);
   const [saving, setSaving]         = useState(false);
   const [err, setErr]               = useState('');
+  const [dragIndex, setDragIndex]   = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [reordering, setReordering] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -17,6 +20,33 @@ export default function Categorias() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  function handleDragStart(idx: number) {
+    setDragIndex(idx);
+  }
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    if (idx !== dragOverIndex) setDragOverIndex(idx);
+  }
+  async function handleDrop(idx: number) {
+    setDragOverIndex(null);
+    if (dragIndex === null || dragIndex === idx) { setDragIndex(null); return; }
+    const reordered = [...categories];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(idx, 0, moved);
+    setDragIndex(null);
+    setCategories(reordered); // otimista — a ordem do cardapio-app segue o sortOrder salvo aqui
+    setReordering(true);
+    try {
+      await Promise.all(reordered.map((c, i) => menuApi.categories.update(c.id, { sortOrder: i })));
+      await load();
+    } catch (e:any) {
+      alert(e.message);
+      await load(); // reverte pro estado do servidor em caso de falha
+    } finally {
+      setReordering(false);
+    }
+  }
 
   async function save() {
     if (!form?.name.trim()) { setErr('Informe o nome da categoria.'); return; }
@@ -44,9 +74,9 @@ export default function Categorias() {
 
       {form && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center' }}>
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:420, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', margin:'auto 0' }}>
             <h2 style={{ margin:'0 0 20px', fontSize:18, fontWeight:900, color:BRAND.navy }}>
               {form.id ? 'Editar Categoria' : 'Nova Categoria'}
             </h2>
@@ -73,14 +103,29 @@ export default function Categorias() {
 
       {loading ? <p style={{ color:'#aaa', fontSize:13 }}>Carregando...</p> : (
         <Card style={{ padding:0, overflow:'hidden' }}>
+          <p style={{ margin:0, padding:'12px 16px', fontSize:12, color:'#999', borderBottom:'1px solid #f5f5f5' }}>
+            Arraste pelo ⠿ para reordenar — essa é a ordem que aparece no cardápio digital.
+            {reordering && <span style={{ color:BRAND.orange, fontWeight:700 }}> Salvando…</span>}
+          </p>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-            <TableHead cols={['Nome','Ordem','Ações']} />
+            <TableHead cols={['','Nome','Ordem','Ações']} />
             <tbody>
               {categories.length === 0 && (
-                <tr><td colSpan={3} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>Nenhuma categoria cadastrada</td></tr>
+                <tr><td colSpan={4} style={{ padding:'40px', textAlign:'center', color:'#ccc' }}>Nenhuma categoria cadastrada</td></tr>
               )}
-              {categories.map((c:any) => (
-                <tr key={c.id} style={{ borderBottom:'1px solid #f5f5f5' }}>
+              {categories.map((c:any, idx:number) => (
+                <tr key={c.id}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDragEnd={() => setDragOverIndex(null)}
+                  onDrop={() => handleDrop(idx)}
+                  style={{
+                    borderBottom:'1px solid #f5f5f5',
+                    background: dragOverIndex === idx ? '#FF6B2B12' : 'transparent',
+                    opacity: dragIndex === idx ? 0.4 : 1,
+                  }}>
+                  <td style={{ padding:'12px 8px 12px 16px', width:24, cursor:'grab', color:'#ccc', fontSize:16, userSelect:'none' }}>⠿</td>
                   <td style={{ padding:'12px 16px', fontWeight:700, color:BRAND.navy }}>{c.name}</td>
                   <td style={{ padding:'12px 16px', color:'#888' }}>{c.sortOrder}</td>
                   <td style={{ padding:'12px 16px' }}>

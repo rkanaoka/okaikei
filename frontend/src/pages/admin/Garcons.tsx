@@ -54,9 +54,9 @@ export default function Garcons() {
 
       {form && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center' }}>
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:420, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', margin:'auto 0' }}>
             <h2 style={{ margin:'0 0 20px', fontSize:18, fontWeight:900, color:BRAND.navy }}>
               {form.id ? 'Editar Garçom' : 'Novo Garçom'}
             </h2>

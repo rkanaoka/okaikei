@@ -52,9 +52,9 @@ export default function OptionGroupEditModal({ initial, onClose, onSaved, zIndex
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex,
-      display:'flex', alignItems:'center', justifyContent:'center' }}>
+      display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
       <div style={{ background:'#fff', borderRadius:16, padding:32, width:560, maxWidth:'92vw',
-        boxShadow:'0 20px 60px rgba(0,0,0,.25)', maxHeight:'90vh', overflowY:'auto' }}>
+        boxShadow:'0 20px 60px rgba(0,0,0,.25)', maxHeight:'90vh', overflowY:'auto', margin:'auto 0' }}>
         <h2 style={{ margin:'0 0 22px', fontSize:18, fontWeight:900, color:BRAND.navy }}>
           {form.id ? 'Editar Grupo de Opções' : 'Novo Grupo de Opções'}
         </h2>

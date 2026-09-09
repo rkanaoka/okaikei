@@ -251,11 +251,11 @@ function LayoutConfigModal({
   return (
     <div style={{
       position:'fixed', inset:0, background:'rgba(0,0,0,.45)',
-      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20,
+      display:'flex', alignItems:'flex-start', justifyContent:'center', zIndex:1000, overflowY:'auto', padding:'24px 20px',
     }}>
       <div style={{
         background:'#fff', borderRadius:16, padding:'28px 32px', maxWidth:520, width:'100%',
-        maxHeight:'88vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,.18)',
+        maxHeight:'88vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,.18)', margin:'auto 0',
       }}>
         <h2 style={{ margin:'0 0 4px', fontSize:19, fontWeight:900, color:BRAND.navy }}>
           Configurar layout da etiqueta
@@ -331,11 +331,11 @@ function ConfirmModal({
   return (
     <div style={{
       position:'fixed', inset:0, background:'rgba(0,0,0,.45)',
-      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000,
+      display:'flex', alignItems:'flex-start', justifyContent:'center', zIndex:1000, overflowY:'auto', padding:'24px 0',
     }}>
       <div style={{
         background:'#fff', borderRadius:16, padding:'32px 36px', maxWidth:380,
-        boxShadow:'0 8px 40px rgba(0,0,0,.18)', textAlign:'center',
+        boxShadow:'0 8px 40px rgba(0,0,0,.18)', textAlign:'center', margin:'auto 0',
       }}>
         <div style={{ fontSize:48, marginBottom:12 }}>🖨️</div>
         <h2 style={{ margin:'0 0 8px', fontSize:20, fontWeight:900, color:BRAND.navy }}>

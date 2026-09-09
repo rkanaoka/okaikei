@@ -55,6 +55,25 @@ export default function Cardapio() {
     setTab('geral');
   }
 
+  function duplicateItem(item: any) {
+    const linkedIds = new Set(groups.filter(g => g.menuItems.some((m:any) => m.id === item.id)).map(g => g.id));
+    const order: string[] = (Array.isArray(item.optionGroupOrder) ? item.optionGroupOrder : []).filter((id:string) => linkedIds.has(id));
+    const missing = [...linkedIds].filter(id => !order.includes(id));
+    setForm({
+      name: `${item.name} (cópia)`,
+      price: String(item.price),
+      description: item.description ?? '',
+      categoryId: item.categoryId ?? '',
+      printCategories: item.printCategories ?? [],
+      imageUrl: item.imageUrl ?? '',
+      chargeServiceFee: item.chargeServiceFee !== false,
+      availabilitySchedule: item.availabilitySchedule ?? null,
+      optionGroupIds: [...order, ...missing],
+      available: true,
+    });
+    setTab('geral');
+  }
+
   function addGroupToItem(groupId: string) {
     setForm((f:any) => f.optionGroupIds.includes(groupId) ? f : { ...f, optionGroupIds: [...f.optionGroupIds, groupId] });
   }
@@ -176,9 +195,9 @@ export default function Cardapio() {
       {/* Modal */}
       {form && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center' }}>
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:520, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)', maxHeight:'90vh', overflowY:'auto' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', maxHeight:'90vh', overflowY:'auto', margin:'auto 0' }}>
             <h2 style={{ margin:'0 0 22px', fontSize:18, fontWeight:900, color:BRAND.navy }}>
               {form.id ? 'Editar Item' : 'Novo Item do Cardápio'}
             </h2>
@@ -468,6 +487,7 @@ export default function Cardapio() {
                     <td style={{ padding:'12px 16px' }}>
                       <div style={{ display:'flex', gap:6 }}>
                         <Btn small variant="ghost" onClick={() => openEdit(item)}>Editar</Btn>
+                        <Btn small variant="ghost" onClick={() => duplicateItem(item)}>Duplicar</Btn>
                         <Btn small variant="danger" onClick={() => del(item.id)}>Excluir</Btn>
                       </div>
                     </td>

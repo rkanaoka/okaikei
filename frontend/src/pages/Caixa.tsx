@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { comandasApi, reasonsApi, menuApi, tablesApi, vouchersApi, garconsApi } from '@/services/api';
+import { comandasApi, reasonsApi, menuApi, tablesApi, vouchersApi, garconsApi, partnershipsApi } from '@/services/api';
 import CurrencyInput from '@/components/CurrencyInput';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653', navyLight:'#1A2E44', cream:'#FFF8F0' };
@@ -123,6 +123,16 @@ export default function Caixa() {
   const [voucherConfirmError, setVoucherConfirmError] = useState('');
   const [voucherConfirming, setVoucherConfirming]     = useState(false);
   const [appliedVoucher, setAppliedVoucher]           = useState<any>(null);
+
+  // Parceria (cupons de empresas parceiras) — funciona como voucher recorrente:
+  // a busca por código já valida se pode ser usada agora, então aplicar é só
+  // um passo local, sem senha nem chamada extra ao backend.
+  const [partnershipCode, setPartnershipCode]                 = useState('');
+  const [partnershipLookup, setPartnershipLookup]             = useState<any>(null);
+  const [partnershipLookupError, setPartnershipLookupError]   = useState('');
+  const [partnershipLookupLoading, setPartnershipLookupLoading] = useState(false);
+  const [appliedPartnership, setAppliedPartnership]           = useState<any>(null);
+
   // Gorjeta compulsória de 10% aplicada por padrão; caixa pode remover ou editar (% ou R$)
   const [surcharge, setSurcharge] = useState<{ type: 'percent'|'fixed'|''; value: string }>({ type:'percent', value:'10' });
   const [payments,  setPayments]  = useState<Payment[]>([{ method:'CASH', amount:'' }]);
@@ -246,10 +256,42 @@ export default function Caixa() {
       : Math.min(base, parseFloat(appliedVoucher.amount) || 0);
     return Math.max(0, Math.min(subtotal, raw));
   })();
+  // Espelha o calculo de OrdersService.computeCouponDiscount no backend — cada
+  // cupom da parceria é avaliado independentemente e os descontos se somam.
+  const partnershipVal = (() => {
+    if (!appliedPartnership) return 0;
+    const items = comanda?.items ?? [];
+    let total = 0;
+    for (const c of appliedPartnership.coupons ?? []) {
+      if (!c.active) continue;
+      if (c.type === 'TWO_FOR_ONE_ITEM') {
+        const matching = items.filter((i:any) => i.menuItemId === c.menuItemId);
+        const qty = matching.reduce((s:number,i:any) => s + i.quantity, 0);
+        if (qty >= 2) total += parseFloat(matching[0]?.unitPrice ?? 0);
+      } else if (c.type === 'TWO_FOR_ONE_CATEGORY') {
+        const matching = items.filter((i:any) => i.menuItem?.categoryId === c.categoryId);
+        const qty = matching.reduce((s:number,i:any) => s + i.quantity, 0);
+        if (qty >= 2) total += Math.min(...matching.map((i:any) => parseFloat(i.unitPrice)));
+      } else if (c.type === 'ITEM_DISCOUNT') {
+        const found = items.find((i:any) => i.menuItemId === c.menuItemId);
+        if (found) {
+          const base = parseFloat(found.unitPrice);
+          const raw = c.discountType === 'percent' ? base * (parseFloat(c.amount)||0) / 100 : Math.min(base, parseFloat(c.amount)||0);
+          total += Math.max(0, raw);
+        }
+      } else if (c.type === 'ORDER_DISCOUNT') {
+        if (c.minOrderValue == null || subtotal >= parseFloat(c.minOrderValue)) {
+          const raw = c.discountType === 'percent' ? subtotal * (parseFloat(c.amount)||0) / 100 : (parseFloat(c.amount)||0);
+          total += Math.max(0, raw);
+        }
+      }
+    }
+    return Math.max(0, Math.min(subtotal, total));
+  })();
   const surchVal   = surcharge.type && parseFloat(surcharge.value) > 0
     ? (surcharge.type === 'percent' ? subtotal * parseFloat(surcharge.value) / 100 : parseFloat(surcharge.value))
     : 0;
-  const total      = Math.max(0, subtotal - discVal - voucherVal + surchVal);
+  const total      = Math.max(0, subtotal - discVal - voucherVal - partnershipVal + surchVal);
   const paidTotal  = payments.reduce((s,p) => s + (parseFloat(p.amount)||0), 0);
   const remaining  = Math.max(0, total - paidTotal);
   const change     = Math.max(0, paidTotal - total);
@@ -524,6 +566,29 @@ export default function Caixa() {
     setAppliedVoucher(null);
   }
 
+  // ── Parceria (cupons de empresas parceiras) ──────────────────────────────
+
+  async function lookupPartnership() {
+    if (!partnershipCode.trim()) return;
+    setPartnershipLookupLoading(true); setPartnershipLookupError(''); setPartnershipLookup(null);
+    try {
+      const p: any = await partnershipsApi.getByCode(partnershipCode.trim());
+      setPartnershipLookup(p);
+    } catch (e:any) { setPartnershipLookupError(e.message); }
+    finally { setPartnershipLookupLoading(false); }
+  }
+
+  // A busca já valida (ativa, dentro da validade, dia/horário) — aplicar é só local.
+  function applyPartnership() {
+    if (!partnershipLookup) return;
+    setAppliedPartnership(partnershipLookup);
+    setPartnershipLookup(null); setPartnershipCode('');
+  }
+
+  function removePartnership() {
+    setAppliedPartnership(null);
+  }
+
   // ── Garçom responsável (fechamento) ──────────────────────────────────────
 
   function openPayDialog() {
@@ -562,11 +627,13 @@ export default function Caixa() {
         surchargeType:  surcharge.type || undefined,
         surchargeValue: surcharge.type ? (parseFloat(surcharge.value) || 0) : undefined,
         voucherId: appliedVoucher?.id || undefined,
+        partnershipId: appliedPartnership?.id || undefined,
         closedByGarcomId: garcomLookup.id,
       });
       await load();
       setShowPay(false);
       setAppliedVoucher(null);
+      setAppliedPartnership(null);
     } catch(e:any) { setPayError(e.message); }
     finally { setPaying(false); }
   }
@@ -758,6 +825,62 @@ export default function Caixa() {
                 )}
               </div>
 
+              {/* Parceria */}
+              <div style={{ marginBottom:8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ color:'#666', fontSize:13 }}>Parceria</span>
+                  {!appliedPartnership && (
+                    <div style={{ display:'flex', gap:6 }}>
+                      <input value={partnershipCode}
+                        onChange={e=>{ setPartnershipCode(e.target.value.toUpperCase()); setPartnershipLookup(null); setPartnershipLookupError(''); }}
+                        onKeyDown={e=>e.key==='Enter' && lookupPartnership()}
+                        placeholder="Código"
+                        style={{ width:110, border:`1.5px solid ${BRAND.navy}`, borderRadius:8, padding:'5px 10px',
+                          fontSize:13, fontWeight:700, outline:'none', textTransform:'uppercase', fontFamily:'inherit' }} />
+                      <button onClick={lookupPartnership} disabled={partnershipLookupLoading || !partnershipCode.trim()}
+                        style={{ background:`${BRAND.navy}15`, border:'none', borderRadius:8, padding:'6px 12px',
+                          cursor:'pointer', fontWeight:700, fontSize:12, color:BRAND.navy, fontFamily:'inherit' }}>
+                        {partnershipLookupLoading ? '...' : 'Buscar'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {partnershipLookupError && <p style={{ color:BRAND.red, fontSize:12, fontWeight:700, margin:'6px 0 0' }}>{partnershipLookupError}</p>}
+
+                {partnershipLookup && !appliedPartnership && (
+                  <div style={{ background:'#fff', border:`1.5px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px', marginTop:8 }}>
+                    <div style={{ fontSize:13, fontWeight:800, color:BRAND.navy, marginBottom:6 }}>{partnershipLookup.name}</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:3, marginBottom:10 }}>
+                      {(partnershipLookup.coupons ?? []).filter((c:any) => c.active).map((c:any) => (
+                        <span key={c.id} style={{ fontSize:12, color:'#666' }}>
+                          {c.type === 'TWO_FOR_ONE_ITEM' && `2 por 1 — ${c.menuItem?.name ?? '?'}`}
+                          {c.type === 'TWO_FOR_ONE_CATEGORY' && `2 por 1 — categoria ${c.category?.name ?? '?'}`}
+                          {c.type === 'ITEM_DISCOUNT' && `Desconto ${c.discountType==='percent' ? `${c.amount}%` : fmtBRL(c.amount)} — ${c.menuItem?.name ?? '?'}`}
+                          {c.type === 'ORDER_DISCOUNT' && `Desconto ${c.discountType==='percent' ? `${c.amount}%` : fmtBRL(c.amount)} no pedido${c.minOrderValue!=null ? ` (mín. ${fmtBRL(c.minOrderValue)})` : ''}`}
+                        </span>
+                      ))}
+                    </div>
+                    <button onClick={applyPartnership} style={{
+                      width:'100%', background:BRAND.green, color:'#fff', border:'none', borderRadius:8,
+                      padding:'8px', cursor:'pointer', fontWeight:800, fontSize:13, fontFamily:'inherit',
+                    }}>
+                      Aplicar Parceria
+                    </button>
+                  </div>
+                )}
+
+                {appliedPartnership && (
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:`${BRAND.green}18`, borderRadius:8, padding:'8px 12px', marginTop:8 }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:BRAND.navy }}>🤝 {appliedPartnership.name} aplicada</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontWeight:700, color:BRAND.green, fontSize:13 }}>−{fmtBRL(partnershipVal)}</span>
+                      <button onClick={removePartnership} style={{ background:'none', border:'none', color:BRAND.red, cursor:'pointer', fontSize:14 }}>✕</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div style={{ marginBottom:8 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <span style={{ color:'#666', fontSize:13 }}>Desconto</span>
@@ -868,6 +991,7 @@ export default function Caixa() {
             <div style={{ background:`${BRAND.navy}0d`, borderRadius:14, padding:'16px', marginBottom:20 }}>
               {discVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Desconto {discount.type==='percent' ? `(${discount.value}%)` : ''}</span><span style={{ color:BRAND.green }}>−{fmtBRL(discVal)}</span></div>}
               {voucherVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Voucher ({appliedVoucher.code})</span><span style={{ color:BRAND.green }}>−{fmtBRL(voucherVal)}</span></div>}
+              {partnershipVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Parceria ({appliedPartnership.name})</span><span style={{ color:BRAND.green }}>−{fmtBRL(partnershipVal)}</span></div>}
               {surchVal>0 && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#666', marginBottom:4 }}><span>Gorjeta {surcharge.type==='percent' ? `(${surcharge.value}%)` : ''}</span><span style={{ color:BRAND.orange }}>+{fmtBRL(surchVal)}</span></div>}
               <div style={{ display:'flex', justifyContent:'space-between' }}>
                 <span style={{ fontWeight:900, fontSize:17, color:BRAND.navy }}>Total a pagar</span>

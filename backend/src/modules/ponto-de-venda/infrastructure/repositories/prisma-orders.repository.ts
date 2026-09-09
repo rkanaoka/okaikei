@@ -203,6 +203,13 @@ export class PrismaOrdersRepository implements OrdersRepositoryPort {
     return (this.prisma as any).voucher.findFirst({ where: { code } });
   }
 
+  async findPartnershipById(id: string) {
+    return this.prisma.partnership.findUnique({
+      where: { id },
+      include: { coupons: true },
+    });
+  }
+
   async findGarcomById(id: string) {
     return (this.prisma as any).garcom.findUnique({ where: { id } });
   }

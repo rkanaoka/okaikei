@@ -95,13 +95,17 @@ export class MenuService {
 
   async createCategory(dto: { name: string; sortOrder?: number }) {
     if (!dto.name?.trim()) throw new BadRequestException('Nome da categoria é obrigatório');
-    return this.repo.createCategory({ id: uuidv7(), name: dto.name.trim(), sortOrder: dto.sortOrder ?? 0 });
+    const category = await this.repo.createCategory({ id: uuidv7(), name: dto.name.trim(), sortOrder: dto.sortOrder ?? 0 });
+    await this.redis.invalidateMenu();
+    return category;
   }
 
   async updateCategory(id: string, dto: Partial<{ name: string; sortOrder: number }>) {
     const cat = await this.repo.findCategoryById(id);
     if (!cat) throw new NotFoundException('Categoria não encontrada');
     if (dto.name !== undefined && !dto.name.trim()) throw new BadRequestException('Nome da categoria é obrigatório');
-    return this.repo.updateCategory(id, { ...dto, name: dto.name?.trim() });
+    const updated = await this.repo.updateCategory(id, { ...dto, name: dto.name?.trim() });
+    await this.redis.invalidateMenu();
+    return updated;
   }
 }

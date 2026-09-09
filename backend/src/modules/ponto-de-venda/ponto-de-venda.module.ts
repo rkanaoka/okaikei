@@ -9,6 +9,7 @@ import { ORDERS_REPOSITORY_PORT }         from './domain/repositories/orders-rep
 import { TABLE_REPOSITORY_PORT }          from './domain/repositories/table-repository.port';
 import { CASH_REPOSITORY_PORT }           from './domain/repositories/cash-repository.port';
 import { VOUCHER_REPOSITORY_PORT }        from './domain/repositories/voucher-repository.port';
+import { PARTNERSHIP_REPOSITORY_PORT }    from './domain/repositories/partnership-repository.port';
 import { PRINTER_REPOSITORY_PORT }        from './domain/repositories/printer-repository.port';
 import { PRINT_TEMPLATE_REPOSITORY_PORT } from './domain/repositories/print-template-repository.port';
 import { REASONS_REPOSITORY_PORT }        from './domain/repositories/reasons-repository.port';
@@ -25,6 +26,7 @@ import { OrdersService }         from './application/use-cases/orders.service';
 import { TablesService }         from './application/use-cases/tables.service';
 import { CashService }           from './application/use-cases/cash.service';
 import { VouchersService }       from './application/use-cases/vouchers.service';
+import { PartnershipsService }   from './application/use-cases/partnerships.service';
 import { PrintingService }       from './application/use-cases/printing.service';
 import { PrintTemplatesService } from './application/use-cases/print-templates.service';
 import { ReasonsService }        from './application/use-cases/reasons.service';
@@ -37,6 +39,7 @@ import { PrismaOrdersRepository }        from './infrastructure/repositories/pri
 import { PrismaTableRepository }         from './infrastructure/repositories/prisma-table.repository';
 import { PrismaCashRepository }          from './infrastructure/repositories/prisma-cash.repository';
 import { PrismaVoucherRepository }       from './infrastructure/repositories/prisma-voucher.repository';
+import { PrismaPartnershipRepository }   from './infrastructure/repositories/prisma-partnership.repository';
 import { PrismaPrinterRepository }       from './infrastructure/repositories/prisma-printer.repository';
 import { PrismaPrintTemplateRepository } from './infrastructure/repositories/prisma-print-template.repository';
 import { PrismaReasonsRepository }       from './infrastructure/repositories/prisma-reasons.repository';
@@ -53,6 +56,7 @@ import { OrdersController }        from '@/runtimes/api/controllers/orders.contr
 import { TablesController }        from '@/runtimes/api/controllers/tables.controller';
 import { CashController }          from '@/runtimes/api/controllers/cash.controller';
 import { VouchersController }      from '@/runtimes/api/controllers/vouchers.controller';
+import { PartnershipsController }  from '@/runtimes/api/controllers/partnerships.controller';
 import { PrintingController }      from '@/runtimes/api/controllers/printing.controller';
 import { PrintTemplatesController } from '@/runtimes/api/controllers/print-templates.controller';
 import { ReasonsController }       from '@/runtimes/api/controllers/reasons.controller';
@@ -67,6 +71,7 @@ import { GarconsController }       from '@/runtimes/api/controllers/garcons.cont
     TablesController,
     CashController,
     VouchersController,
+    PartnershipsController,
     PrintingController,
     PrintTemplatesController,
     ReasonsController,
@@ -80,6 +85,7 @@ import { GarconsController }       from '@/runtimes/api/controllers/garcons.cont
     TablesService,
     CashService,
     VouchersService,
+    PartnershipsService,
     PrintingService,
     PrintTemplatesService,
     ReasonsService,
@@ -92,6 +98,7 @@ import { GarconsController }       from '@/runtimes/api/controllers/garcons.cont
     { provide: TABLE_REPOSITORY_PORT,          useClass: PrismaTableRepository },
     { provide: CASH_REPOSITORY_PORT,           useClass: PrismaCashRepository },
     { provide: VOUCHER_REPOSITORY_PORT,        useClass: PrismaVoucherRepository },
+    { provide: PARTNERSHIP_REPOSITORY_PORT,    useClass: PrismaPartnershipRepository },
     { provide: PRINTER_REPOSITORY_PORT,        useClass: PrismaPrinterRepository },
     { provide: PRINT_TEMPLATE_REPOSITORY_PORT, useClass: PrismaPrintTemplateRepository },
     { provide: REASONS_REPOSITORY_PORT,        useClass: PrismaReasonsRepository },
@@ -108,6 +115,7 @@ import { GarconsController }       from '@/runtimes/api/controllers/garcons.cont
     TablesService,
     CashService,
     VouchersService,
+    PartnershipsService,
     PrintingService,
     PrintTemplatesService,
     ReasonsService,

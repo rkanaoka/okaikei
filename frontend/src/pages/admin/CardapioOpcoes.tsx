@@ -158,9 +158,9 @@ export default function CardapioOpcoes({ menuItems }: { menuItems: any[] }) {
       {/* Modal de vínculo com produtos */}
       {linking && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center' }}>
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:480, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)', maxHeight:'80vh', display:'flex', flexDirection:'column' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', maxHeight:'80vh', display:'flex', flexDirection:'column', margin:'auto 0' }}>
             <h2 style={{ margin:'0 0 6px', fontSize:18, fontWeight:900, color:BRAND.navy }}>Produtos vinculados</h2>
             <p style={{ margin:'0 0 18px', fontSize:12, color:'#aaa' }}>{linking.name}</p>
             <div style={{ overflowY:'auto', flex:1, border:'1px solid #eee', borderRadius:8 }}>

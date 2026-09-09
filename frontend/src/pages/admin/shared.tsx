@@ -1,4 +1,5 @@
 // Componentes de UI e helpers compartilhados entre as páginas do admin.
+import { menuApi } from '@/services/api';
 
 export const BRAND = {
   navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946',
@@ -26,6 +27,103 @@ export function getSubtotal(c: any) {
 export function getTotal(c: any) {
   if (c.payments?.length) return c.payments.reduce((s: number, p: any) => s + parseFloat(p.amount), 0);
   return getSubtotal(c);
+}
+export function getSurcharge(c: any) {
+  const sub = getSubtotal(c);
+  const v = parseFloat(c.surchargeValue) || 0;
+  return c.surchargeType === 'percent' ? sub * v / 100 : v;
+}
+export function getDiscount(c: any) {
+  const sub = getSubtotal(c);
+  const raw = c.discountType === 'percent' ? sub * (parseFloat(c.discountValue) || 0) / 100 : (parseFloat(c.discountValue) || 0);
+  const discVal = Math.min(sub, Math.max(0, raw));
+  const voucherVal = parseFloat(c.voucherDiscount) || 0;
+  return discVal + voucherVal;
+}
+
+// ── Turnos ──────────────────────────────────────────────────────────────────
+export const SHIFTS = [
+  { key:'lunch',     label:'Almoço',        hint:'11h–15h', start:11, end:15 },
+  { key:'afternoon', label:'Café da tarde', hint:'15h–19h', start:15, end:19 },
+  { key:'dinner',    label:'Jantar',        hint:'19h–23h', start:19, end:23 },
+];
+export function getShiftKey(date: Date | string): string | null {
+  const spDate = new Date(new Date(date).toLocaleString('en-US', { timeZone:'America/Sao_Paulo' }));
+  const hour = spDate.getHours();
+  const shift = SHIFTS.find(s => hour >= s.start && hour < s.end);
+  return shift?.key ?? null;
+}
+export function getShiftLabel(date: Date | string): string {
+  return SHIFTS.find(s => s.key === getShiftKey(date))?.label ?? 'Fora do turno';
+}
+
+// ── Filtro de período (data inicial/final, formato yyyy-mm-dd em horário de Brasília) ──
+export function toSPDateStr(d: Date | string): string {
+  const spDate = new Date(new Date(d).toLocaleString('en-US', { timeZone:'America/Sao_Paulo' }));
+  const y = spDate.getFullYear();
+  const m = String(spDate.getMonth() + 1).padStart(2, '0');
+  const day = String(spDate.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+export function inDateRange(d: Date | string, from: string, to: string): boolean {
+  const day = toSPDateStr(d);
+  if (from && day < from) return false;
+  if (to && day > to) return false;
+  return true;
+}
+
+export function DateRangeFilter({ from, to, onFrom, onTo }: { from:string; to:string; onFrom:(v:string)=>void; onTo:(v:string)=>void }) {
+  const inputStyle: React.CSSProperties = {
+    border:'1.5px solid #ddd', borderRadius:8, padding:'8px 10px', fontSize:13,
+    fontWeight:600, outline:'none', fontFamily:'inherit', colorScheme:'light',
+  };
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+      <input type="date" value={from} onChange={e=>onFrom(e.target.value)} style={inputStyle} />
+      <span style={{ color:'#999', fontSize:12 }}>até</span>
+      <input type="date" value={to} onChange={e=>onTo(e.target.value)} style={inputStyle} />
+    </div>
+  );
+}
+
+// ── Resolução de item do cardápio → categoria (para agrupar relatórios) ─────
+export interface MenuItemInfo {
+  id: string; name: string; price: number;
+  categoryId: string | null; categoryName: string;
+}
+export async function fetchMenuItemInfoMap(): Promise<Map<string, MenuItemInfo>> {
+  const items: any[] = await menuApi.listAll() as any;
+  const map = new Map<string, MenuItemInfo>();
+  for (const i of items) {
+    map.set(i.id, {
+      id: i.id, name: i.name, price: Number(i.price),
+      categoryId: i.categoryId ?? null,
+      categoryName: i.menuCategory?.name ?? 'Sem categoria',
+    });
+  }
+  return map;
+}
+
+// ── Toggle de agrupamento (Produtos | Categorias) para os gráficos ─────────
+export function GroupToggle({ value, onChange }: { value:'produto'|'categoria'; onChange:(v:'produto'|'categoria')=>void }) {
+  const opts: Array<{ key:'produto'|'categoria'; label:string }> = [
+    { key:'produto',   label:'Produtos' },
+    { key:'categoria', label:'Categorias' },
+  ];
+  return (
+    <div style={{ display:'inline-flex', border:'1.5px solid #ddd', borderRadius:8, overflow:'hidden' }}>
+      {opts.map(o => (
+        <button key={o.key} onClick={()=>onChange(o.key)} style={{
+          padding:'7px 14px', border:'none', cursor:'pointer', fontFamily:'inherit',
+          fontSize:12, fontWeight:700,
+          background: value===o.key ? BRAND.navy : '#fff',
+          color:       value===o.key ? BRAND.yellow : '#666',
+        }}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {

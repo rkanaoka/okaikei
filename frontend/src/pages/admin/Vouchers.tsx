@@ -170,9 +170,9 @@ export default function Vouchers() {
 
       {form && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200,
-          display:'flex', alignItems:'center', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:560, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', margin:'auto 0' }}>
             <h2 style={{ margin:'0 0 20px', fontSize:18, fontWeight:900, color:BRAND.navy }}>
               {form.id ? 'Editar Voucher' : 'Novo Voucher'}
             </h2>
@@ -344,9 +344,9 @@ export default function Vouchers() {
 
       {justCreated && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:210,
-          display:'flex', alignItems:'center', justifyContent:'center' }}>
+          display:'flex', alignItems:'flex-start', justifyContent:'center', overflowY:'auto', padding:'24px 0' }}>
           <div style={{ background:'#fff', borderRadius:16, padding:32, width:400, maxWidth:'90vw',
-            boxShadow:'0 20px 60px rgba(0,0,0,.25)', textAlign:'center' }}>
+            boxShadow:'0 20px 60px rgba(0,0,0,.25)', textAlign:'center', margin:'auto 0' }}>
             <div style={{ fontSize:44, marginBottom:8 }}>🎟️</div>
             <h2 style={{ margin:'0 0 4px', fontSize:18, fontWeight:900, color:BRAND.navy }}>Voucher criado!</h2>
             <p style={{ margin:'0 0 20px', fontSize:13, color:'#888' }}>{justCreated.customerName}</p>

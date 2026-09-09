@@ -33,9 +33,9 @@ const ghostBtnStyle: CSSProperties = { background:'transparent', border:`2px sol
 
 function Modal({ title, onClose, children, width=420 }:any) {
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(13,27,42,.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:300, padding:16 }}
+    <div style={{ position:'fixed', inset:0, background:'rgba(13,27,42,.8)', display:'flex', alignItems:'flex-start', justifyContent:'center', zIndex:300, overflowY:'auto', padding:'24px 16px' }}
       onClick={e=>{ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:width, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 12px 40px rgba(0,0,0,.4)' }}>
+      <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:width, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 12px 40px rgba(0,0,0,.4)', margin:'auto 0' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 20px', borderBottom:'1px solid #eee' }}>
           <div style={{ fontWeight:900, fontSize:16, color:BRAND.navy }}>{title}</div>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:BRAND.navy }}>✕</button>
