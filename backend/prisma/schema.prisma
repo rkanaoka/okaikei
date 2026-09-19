@@ -539,3 +539,161 @@ model SystemConfig {
 
   @@map("system_config")
 }
+
+// ─── Estoque de Insumos ─────────────────────────────────────────────────────
+// Cadastro de itens de estoque (insumos do restaurante), suas variações por
+// marca/fornecedor (cada uma podendo ser comprada em uma unidade diferente) e
+// a entrada de estoque via cadastro manual ou importação de NF-e (XML).
+
+// Unidade em que o saldo do insumo é sempre mantido — massa (mg), volume (ml)
+// ou contagem (un). Toda compra é convertida para esta unidade ao entrar.
+enum UnidadeBase {
+  MG
+  ML
+  UN
+}
+
+// Unidade em que um fornecedor efetivamente vende/embala o insumo. MG/G/KG,
+// ML/L e UN/DUZIA têm fator de conversão fixo para a UnidadeBase; CAIXA,
+// PACOTE, FARDO e OUTRO são embalagens sem tamanho padronizado — o fator
+// (quantas unidades-base equivalem a 1 embalagem) é informado por fornecedor.
+enum UnidadeMedida {
+  MG
+  G
+  KG
+  ML
+  L
+  UN
+  DUZIA
+  CAIXA
+  PACOTE
+  FARDO
+  OUTRO
+}
+
+enum MovimentacaoTipo {
+  ENTRADA
+  SAIDA
+  AJUSTE
+}
+
+enum MovimentacaoOrigem {
+  MANUAL
+  NFE
+}
+
+enum NotaFiscalStatus {
+  PROCESSADA
+  ERRO
+}
+
+// ─── Fornecedores de insumos ────────────────────────────────────────────────
+model Fornecedor {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  nome      String   @db.VarChar(150)
+  cnpj      String?  @unique @db.VarChar(20)
+  telefone  String?  @db.VarChar(20)
+  email     String?  @db.VarChar(200)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  itensFornecidos InsumoFornecedorItem[]
+  notasFiscais    NotaFiscalImportada[]
+
+  @@map("fornecedores")
+}
+
+// ─── Insumo — item canônico de estoque (ex: "Arroz", "Filé de Salmão") ──────
+model InsumoItem {
+  id            String      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name          String      @db.VarChar(150)
+  categoria     String?     @db.VarChar(60)
+  unidadeBase   UnidadeBase @map("unidade_base")
+  // Saldo sempre expresso na unidadeBase — nunca na unidade de compra de um fornecedor específico.
+  estoqueAtual  Decimal     @default(0) @map("estoque_atual") @db.Decimal(14, 3)
+  estoqueMinimo Decimal?    @map("estoque_minimo") @db.Decimal(14, 3)
+  active        Boolean     @default(true)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  itensFornecedor InsumoFornecedorItem[]
+  movimentacoes   MovimentacaoEstoque[]
+
+  @@index([active])
+  @@map("insumo_itens")
+}
+
+// ─── Vínculo Insumo × Marca/Fornecedor — uma "SKU" de compra ────────────────
+// O mesmo insumo pode ter várias linhas aqui: marcas diferentes e/ou unidades
+// de compra diferentes (ex: "Arroz Tio João, saco de 5kg" e "Arroz Camil,
+// fardo com 10 pacotes de 1kg" apontam para o mesmo InsumoItem).
+model InsumoFornecedorItem {
+  id                  String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  insumoId            String        @map("insumo_id") @db.Uuid
+  fornecedorId        String?       @map("fornecedor_id") @db.Uuid
+  marca               String?       @db.VarChar(100)
+  // Código do produto no cadastro do fornecedor (prod/cProd da NF-e) — usado
+  // para reconhecer automaticamente o item em importações futuras.
+  codigoFornecedor    String?       @map("codigo_fornecedor") @db.VarChar(60)
+  unidadeCompra       UnidadeMedida @map("unidade_compra")
+  // Quantas unidadeBase (do InsumoItem) equivalem a 1 unidadeCompra.
+  fatorConversao      Decimal       @map("fator_conversao") @db.Decimal(14, 4)
+  ultimoPrecoUnitario Decimal?      @map("ultimo_preco_unitario") @db.Decimal(12, 4)
+  active              Boolean       @default(true)
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  insumo        InsumoItem            @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+  fornecedor    Fornecedor?           @relation(fields: [fornecedorId], references: [id])
+  movimentacoes MovimentacaoEstoque[]
+
+  @@index([insumoId])
+  @@index([fornecedorId])
+  @@unique([fornecedorId, codigoFornecedor], map: "insumo_fornecedor_item_codigo_unq")
+  @@map("insumo_fornecedor_itens")
+}
+
+// ─── Movimentações de estoque de insumos (kardex) ───────────────────────────
+model MovimentacaoEstoque {
+  id               String             @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  insumoId         String             @map("insumo_id") @db.Uuid
+  fornecedorItemId String?            @map("fornecedor_item_id") @db.Uuid
+  tipo             MovimentacaoTipo
+  origem           MovimentacaoOrigem @default(MANUAL)
+  // Sempre positiva, expressa na unidadeBase do insumo.
+  quantidade       Decimal            @db.Decimal(14, 3)
+  precoUnitario    Decimal?           @map("preco_unitario") @db.Decimal(12, 4)
+  notaFiscalId     String?            @map("nota_fiscal_id") @db.Uuid
+  observacao       String?            @db.VarChar(300)
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  insumo         InsumoItem            @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+  fornecedorItem InsumoFornecedorItem? @relation(fields: [fornecedorItemId], references: [id])
+  notaFiscal     NotaFiscalImportada?  @relation(fields: [notaFiscalId], references: [id])
+
+  @@index([insumoId])
+  @@index([notaFiscalId])
+  @@map("movimentacoes_estoque")
+}
+
+// ─── Notas Fiscais (NF-e) importadas para entrada de estoque ────────────────
+model NotaFiscalImportada {
+  id           String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  chaveAcesso  String           @unique @map("chave_acesso") @db.VarChar(44)
+  numero       String?          @db.VarChar(20)
+  serie        String?          @db.VarChar(10)
+  fornecedorId String?          @map("fornecedor_id") @db.Uuid
+  dataEmissao  DateTime?        @map("data_emissao")
+  valorTotal   Decimal?         @map("valor_total") @db.Decimal(12, 2)
+  status       NotaFiscalStatus @default(PROCESSADA)
+  // XML original, guardado para auditoria/reprocessamento.
+  xmlRaw       String?          @map("xml_raw") @db.Text
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  fornecedor    Fornecedor?           @relation(fields: [fornecedorId], references: [id])
+  movimentacoes MovimentacaoEstoque[]
+
+  @@index([fornecedorId])
+  @@map("notas_fiscais_importadas")
+}

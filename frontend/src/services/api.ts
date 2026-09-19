@@ -256,4 +256,92 @@ export const syncApi = {
   flush:  () => http.post('/sync/flush'),
 };
 
+// ── Insumos (Controle de Estoque) ─────────────────────────────────────────────
+export type UnidadeBase = 'MG' | 'ML' | 'UN';
+export type UnidadeMedida = 'MG'|'G'|'KG'|'ML'|'L'|'UN'|'DUZIA'|'CAIXA'|'PACOTE'|'FARDO'|'OUTRO';
+export type UnidadeInfo = { base: UnidadeBase; fatorFixo: number | null; label: string };
+
+export type FornecedorRow = {
+  id: string; nome: string; cnpj: string | null; telefone: string | null; email: string | null; active: boolean;
+};
+
+export type InsumoFornecedorItemRow = {
+  id: string; insumoId: string; fornecedorId: string | null; marca: string | null;
+  codigoFornecedor: string | null; unidadeCompra: UnidadeMedida; fatorConversao: string;
+  ultimoPrecoUnitario: string | null; active: boolean;
+  fornecedor: { id: string; nome: string; cnpj: string | null } | null;
+};
+
+export type InsumoRow = {
+  id: string; name: string; categoria: string | null; unidadeBase: UnidadeBase;
+  estoqueAtual: string; estoqueMinimo: string | null; active: boolean;
+  itensFornecedor: InsumoFornecedorItemRow[];
+};
+
+export const fornecedoresApi = {
+  list:   (all = false) => http.get('/estoque/fornecedores', { params: all ? { all: 'true' } : {} }) as Promise<FornecedorRow[]>,
+  create: (d: { nome: string; cnpj?: string; telefone?: string; email?: string }) => http.post('/estoque/fornecedores', d),
+  update: (id: string, d: Partial<{ nome: string; cnpj: string | null; telefone: string | null; email: string | null; active: boolean }>) =>
+    http.put(`/estoque/fornecedores/${id}`, d),
+};
+
+export const insumosApi = {
+  unidadesMedida: () =>
+    http.get('/estoque/insumos/unidades-medida') as Promise<Record<UnidadeMedida, UnidadeInfo>>,
+
+  list:   (all = false) => http.get('/estoque/insumos', { params: all ? { all: 'true' } : {} }) as Promise<InsumoRow[]>,
+  get:    (id: string) => http.get(`/estoque/insumos/${id}`) as Promise<InsumoRow>,
+  create: (d: { name: string; categoria?: string; unidadeBase: UnidadeBase; estoqueMinimo?: number }) => http.post('/estoque/insumos', d),
+  update: (id: string, d: Partial<{ name: string; categoria: string | null; estoqueMinimo: number | null; active: boolean }>) =>
+    http.put(`/estoque/insumos/${id}`, d),
+  remove: (id: string) => http.delete(`/estoque/insumos/${id}`),
+
+  addFornecedorItem: (insumoId: string, d: {
+    fornecedorId?: string | null; marca?: string; codigoFornecedor?: string;
+    unidadeCompra: UnidadeMedida; fatorConversao?: number; ultimoPrecoUnitario?: number;
+  }) => http.post(`/estoque/insumos/${insumoId}/fornecedores`, d),
+
+  updateFornecedorItem: (id: string, d: Partial<{
+    fornecedorId: string | null; marca: string | null; codigoFornecedor: string | null;
+    unidadeCompra: UnidadeMedida; fatorConversao: number; ultimoPrecoUnitario: number | null; active: boolean;
+  }>) => http.put(`/estoque/insumos/fornecedores/${id}`, d),
+
+  removeFornecedorItem: (id: string) => http.delete(`/estoque/insumos/fornecedores/${id}`),
+
+  registrarEntrada: (insumoId: string, d: {
+    fornecedorItemId?: string; quantidadeCompra: number; unidadeCompra?: UnidadeMedida;
+    precoUnitario?: number; observacao?: string;
+  }) => http.post(`/estoque/insumos/${insumoId}/entrada`, d),
+};
+
+// ── Importação de NF-e (XML) → Entrada de Estoque ─────────────────────────────
+export type NfeItemPreview = {
+  codigoFornecedor: string; descricao: string; unidadeComercial: string;
+  unidadeSugerida: UnidadeMedida | null; quantidade: number; valorUnitario: number; valorTotal: number;
+  vinculado: boolean; fornecedorItemId?: string; insumoId?: string; insumoNome?: string; unidadeBaseInsumo?: UnidadeBase;
+};
+
+export type NfePreviewResult = {
+  chaveAcesso: string; numero: string | null; serie: string | null;
+  dataEmissao: string | null; valorTotal: number | null;
+  fornecedor: { cnpj: string | null; nome: string | null };
+  fornecedorCadastrado: boolean; jaImportada: boolean; itens: NfeItemPreview[];
+};
+
+export type NfeItemConfirmacao = {
+  codigoFornecedor: string; descricao: string; unidadeComercial: string;
+  quantidade: number; valorUnitario: number;
+  insumoId?: string;
+  criarInsumo?: { name: string; categoria?: string; unidadeBase: UnidadeBase; estoqueMinimo?: number | null };
+  fornecedorItemId?: string;
+  unidadeCompra?: UnidadeMedida;
+  fatorConversao?: number;
+  marca?: string;
+};
+
+export const nfeImportApi = {
+  preview:   (xml: string) => http.post('/estoque/insumos/nfe/preview', { xml }) as Promise<NfePreviewResult>,
+  confirmar: (xml: string, itens: NfeItemConfirmacao[]) => http.post('/estoque/insumos/nfe/confirmar', { xml, itens }),
+};
+
 export default http;

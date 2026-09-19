@@ -1,0 +1,71 @@
+# Bodogami - Deploy do cardapio digital na VPS Hostinger
+# Uso: make -f Makefile.vps <target>
+# Requer .env.vps configurado na raiz do projeto.
+
+.DEFAULT_GOAL := help
+.PHONY: help check-env deploy up down restart logs ps status build prune
+
+# Sem -p: o workflow deploy-vps.yml (.github/workflows/deploy-vps.yml) sobe a
+# mesma stack via SSH rodando "docker compose" direto na raiz do repo, sem
+# nome de projeto explicito — o Compose usa o nome do diretorio (ex: "okaikei"
+# em /opt/okaikei) como project name. Um -p diferente aqui (ex: "okaikei-vps")
+# faria os targets abaixo tentar criar containers com os mesmos container_name
+# fixos (okaikei_vps_api, okaikei_cardapio_app, okaikei_redis) sob outro
+# projeto, e o Docker recusa por nome de container duplicado. Rode sempre a
+# partir da raiz do repo (mesmo diretorio usado pelo CI) para os nomes baterem.
+COMPOSE = docker compose -f docker-compose.hostinger.yml --env-file .env.vps
+
+help:
+	@echo ""
+	@echo "  Okaikei - Cardapio digital na VPS"
+	@echo "  make -f Makefile.vps deploy    Rebuilda o cardapio e a API e sobe a stack"
+	@echo "  make -f Makefile.vps up        Sobe a stack sem rebuild"
+	@echo "  make -f Makefile.vps down      Para a stack"
+	@echo "  make -f Makefile.vps restart   Reinicia a stack"
+	@echo "  make -f Makefile.vps logs      Segue os logs (s=cardapio-app, por exemplo)"
+	@echo "  make -f Makefile.vps ps        Lista o estado dos containers"
+	@echo "  make -f Makefile.vps status    Lista containers e testa a API"
+	@echo "  make -f Makefile.vps build     Rebuilda cardapio-app e vps-api"
+	@echo "  make -f Makefile.vps prune     Remove imagens antigas"
+	@echo ""
+
+check-env:
+	@test -f .env.vps || (echo "Erro: .env.vps nao encontrado. Copie .env.vps.example e configure os valores." && exit 1)
+
+# O vps-api e o cardapio-app sao rebuildados juntos para manter a API e a SPA
+# sempre alinhadas no deploy.
+deploy: check-env build
+	$(COMPOSE) up -d --remove-orphans
+	@echo "Aguardando servicos subirem..."
+	@sleep 15
+	@echo "Deploy concluido."
+	$(MAKE) -f Makefile.vps status
+
+up: check-env
+	$(COMPOSE) up -d --remove-orphans
+
+down:
+	$(COMPOSE) down
+
+restart: down up
+
+logs:
+ifdef s
+	$(COMPOSE) logs -f $(s)
+else
+	$(COMPOSE) logs -f
+endif
+
+ps:
+	$(COMPOSE) ps
+
+status: check-env
+	$(COMPOSE) ps
+	@echo ""
+	@$(COMPOSE) exec -T vps-api wget -qO- http://127.0.0.1:4000/health >/dev/null 2>&1 && echo "API: OK" || echo "API: FALHOU (verifique os logs)"
+
+build: check-env
+	$(COMPOSE) build --no-cache cardapio-app vps-api
+
+prune:
+	docker image prune -f
