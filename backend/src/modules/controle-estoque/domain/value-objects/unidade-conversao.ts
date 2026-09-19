@@ -14,7 +14,7 @@ export type UnidadeMedida =
   | 'ML' | 'L'
   | 'UN' | 'DUZIA' | 'CAIXA' | 'PACOTE' | 'FARDO' | 'OUTRO';
 
-interface UnidadeInfo {
+export interface UnidadeInfo {
   base: UnidadeBase;
   /** Quantas unidades-base equivalem a 1 desta unidade. `null` = fator variável,
    *  informado manualmente por fornecedor (embalagens sem tamanho padronizado). */
