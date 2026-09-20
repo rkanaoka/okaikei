@@ -659,6 +659,8 @@ model InsumoItem {
   categoria     String?     @db.VarChar(60)
   categoriaId    String?     @map("categoria_id") @db.Uuid
   subcategoriaId String?     @map("subcategoria_id") @db.Uuid
+  // Código de barras EAN-8 — gerado automaticamente na criação (manual ou via NF-e).
+  codigoBarras  String?     @unique @map("codigo_barras") @db.VarChar(8)
   unidadeBase   UnidadeBase @map("unidade_base")
   // Saldo sempre expresso na unidadeBase — nunca na unidade de compra de um fornecedor específico.
   estoqueAtual  Decimal     @default(0) @map("estoque_atual") @db.Decimal(14, 3)
@@ -675,6 +677,7 @@ model InsumoItem {
   @@index([active])
   @@index([categoriaId])
   @@index([subcategoriaId])
+  @@index([codigoBarras])
   @@map("insumo_itens")
 }
 

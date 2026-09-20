@@ -103,10 +103,10 @@ function ItensEstoqueTab() {
       {loading ? <p style={{ color: '#aaa', fontSize: 13 }}>Carregando...</p> : (
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <TableHead cols={['Insumo', 'Categoria', 'Tipo de medida', 'Estoque atual', 'Estoque mínimo', 'Marcas/Fornecedores', '']} />
+            <TableHead cols={['Insumo', 'Categoria', 'Código de barras', 'Tipo de medida', 'Estoque atual', 'Estoque mínimo', 'Marcas/Fornecedores', '']} />
             <tbody>
               {insumos.length === 0 && (
-                <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#ccc' }}>Nenhum insumo cadastrado</td></tr>
+                <tr><td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#ccc' }}>Nenhum insumo cadastrado</td></tr>
               )}
               {insumos.map(i => {
                 const abaixoDoMinimo = i.estoqueMinimo != null && parseFloat(i.estoqueAtual) < parseFloat(i.estoqueMinimo);
@@ -116,6 +116,7 @@ function ItensEstoqueTab() {
                     <td style={{ padding: '12px 16px', color: '#888' }}>
                       {i.categoriaRel ? [i.categoriaRel.nome, i.subcategoriaRel?.nome].filter(Boolean).join(' / ') : (i.categoria || '—')}
                     </td>
+                    <td style={{ padding: '12px 16px', color: '#888', fontFamily: 'monospace' }}>{i.codigoBarras || '—'}</td>
                     <td style={{ padding: '12px 16px', color: '#888' }}>{UNIDADE_BASE_LABEL[i.unidadeBase]}</td>
                     <td style={{ padding: '12px 16px', fontWeight: 700, color: abaixoDoMinimo ? BRAND.red : BRAND.navy }}>
                       {formatEstoque(i.estoqueAtual, i.unidadeBase)}
@@ -241,7 +242,14 @@ function InsumoDetalheModal({ insumo, fornecedores, unidades, categorias, onClos
 
   return (
     <ModalShell title={`Insumo — ${insumo.name}`} width={700} onClose={onClose}>
-      <Field label="Nome"><input style={inputStyle} value={basic.name} onChange={e => setBasic({ ...basic, name: e.target.value })} /></Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+        <Field label="Nome"><input style={inputStyle} value={basic.name} onChange={e => setBasic({ ...basic, name: e.target.value })} /></Field>
+        <Field label="Código de barras (EAN-8)">
+          <div style={{ ...inputStyle, background: '#f8f9fa', fontFamily: 'monospace', fontWeight: 700, color: BRAND.navy }}>
+            {insumo.codigoBarras || '—'}
+          </div>
+        </Field>
+      </div>
       <CategoriaSubcategoriaFields
         categorias={categorias} categoriaId={basic.categoriaId} subcategoriaId={basic.subcategoriaId}
         onChange={(categoriaId, subcategoriaId) => setBasic({ ...basic, categoriaId, subcategoriaId })}

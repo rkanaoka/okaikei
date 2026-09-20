@@ -14,6 +14,7 @@ import {
 import {
   UnidadeBase, UnidadeMedida, inferirUnidadeMedida, resolverFatorConversao,
 } from '@/modules/controle-estoque/domain/value-objects/unidade-conversao';
+import { gerarCodigoBarrasUnico } from '@/modules/controle-estoque/application/use-cases/insumo-codigo-barras.util';
 import { uuidv7 } from 'uuidv7';
 
 export interface NfeItemPreview {
@@ -143,10 +144,12 @@ export class ImportarNfeService {
         if (!item.criarInsumo?.name?.trim()) {
           throw new BadRequestException(`O item "${item.descricao}" não foi vinculado a nenhum insumo — escolha um existente ou informe o nome do novo insumo.`);
         }
+        const codigoBarras = await gerarCodigoBarrasUnico(this.insumoRepo);
         const criado = await this.insumoRepo.create({
           id: uuidv7(),
           name: item.criarInsumo.name.trim(),
           categoria: item.criarInsumo.categoria || null,
+          codigoBarras,
           unidadeBase: item.criarInsumo.unidadeBase,
           estoqueMinimo: item.criarInsumo.estoqueMinimo ?? null,
         });

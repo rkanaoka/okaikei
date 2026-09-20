@@ -22,6 +22,7 @@ import Parcerias            from './admin/Parcerias';
 import ModelosImpressao     from './admin/ModelosImpressao';
 import ConfigLoja           from './admin/ConfigLoja';
 import GerarEtiquetas       from './admin/GerarEtiquetas';
+import GerarCodigoBarras    from './admin/GerarCodigoBarras';
 import Insumos              from './admin/Insumos';
 import CategoriasInsumo     from './admin/CategoriasInsumo';
 import Fornecedores         from './admin/Fornecedores';
@@ -35,7 +36,7 @@ type SectionId =
   | 'fin-pagamentos' | 'fin-gorjetas' | 'fin-frentes-caixa'
   | 'rel-clientes'   | 'rel-cupons' | 'rel-parcerias'
   | 'rel-itens'      | 'rel-faturamento' | 'rel-pedidos' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
-  | 'estoque-itens' | 'estoque-categorias' | 'estoque-fornecedores' | 'estoque-etiquetas'
+  | 'estoque-itens' | 'estoque-categorias' | 'estoque-fornecedores' | 'estoque-etiquetas' | 'estoque-codigo-barras'
   | 'config-loja'    | 'config-horarios' | 'config-fiscal'
   | 'config-cancelamento' | 'config-desconto' | 'config-impressao' | 'config-usuarios' | 'config-garcons' | 'config-mesas';
 
@@ -72,6 +73,7 @@ const NAV: Array<
     { id:'estoque-categorias',   label:'Categorias de Insumos' },
     { id:'estoque-fornecedores', label:'Fornecedores' },
     { id:'estoque-etiquetas',    label:'Gerar Etiquetas de Validade' },
+    { id:'estoque-codigo-barras', label:'Gerar Código de Barras' },
   ]},
   { type:'group', label:'Configurações', icon:'⚙️', permission:'configuracoes', items:[
     { id:'config-loja',          label:'Dados da loja' },
@@ -138,6 +140,7 @@ function renderSection(id: SectionId) {
     case 'estoque-categorias':  return <CategoriasInsumo />;
     case 'estoque-fornecedores': return <Fornecedores />;
     case 'estoque-etiquetas':   return <GerarEtiquetas />;
+    case 'estoque-codigo-barras': return <GerarCodigoBarras />;
     case 'config-loja':         return <ConfigLoja />;
     case 'config-horarios':     return <EmptyPlaceholder icon="🕐" title="Horários de Funcionamento" subtitle="Módulo em desenvolvimento" />;
     case 'config-fiscal':       return <EmptyPlaceholder icon="📄" title="Dados Fiscais" subtitle="Módulo em desenvolvimento" />;

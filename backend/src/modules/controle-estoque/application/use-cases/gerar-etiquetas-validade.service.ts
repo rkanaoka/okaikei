@@ -9,6 +9,7 @@ import {
   EtiquetaLayoutRepositoryPort,
 } from '@/modules/controle-estoque/domain/repositories/etiqueta-layout-repository.port';
 import {
+  ETIQUETA_LAYOUT_CONFIG_KEY,
   DEFAULT_ETIQUETA_LAYOUT,
   EtiquetaLayoutConfig,
   sanitizeEtiquetaLayout,
@@ -43,19 +44,19 @@ export class GerarEtiquetasValidadeService {
   // ── Layout configurável ──────────────────────────────────────────────────────
 
   async getLayout(): Promise<EtiquetaLayoutConfig> {
-    const saved = await this.layoutRepo.find();
+    const saved = await this.layoutRepo.find(ETIQUETA_LAYOUT_CONFIG_KEY);
     return sanitizeEtiquetaLayout(saved ?? {});
   }
 
   async saveLayout(partial: Partial<EtiquetaLayoutConfig>): Promise<EtiquetaLayoutConfig> {
     const current = await this.getLayout();
     const next = sanitizeEtiquetaLayout({ ...current, ...partial });
-    await this.layoutRepo.save(next);
+    await this.layoutRepo.save(ETIQUETA_LAYOUT_CONFIG_KEY, next);
     return next;
   }
 
   async resetLayout(): Promise<EtiquetaLayoutConfig> {
-    await this.layoutRepo.save(DEFAULT_ETIQUETA_LAYOUT);
+    await this.layoutRepo.save(ETIQUETA_LAYOUT_CONFIG_KEY, DEFAULT_ETIQUETA_LAYOUT);
     return { ...DEFAULT_ETIQUETA_LAYOUT };
   }
 

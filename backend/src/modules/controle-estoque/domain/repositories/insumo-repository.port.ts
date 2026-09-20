@@ -3,9 +3,10 @@ export const INSUMO_REPOSITORY_PORT = Symbol('InsumoRepositoryPort');
 export interface InsumoRepositoryPort {
   findAll(includeInactive?: boolean): Promise<any[]>;
   findById(id: string): Promise<any | null>;
+  findByCodigoBarras(codigoBarras: string): Promise<any | null>;
   create(data: {
     id: string; name: string; categoria?: string | null; categoriaId?: string | null; subcategoriaId?: string | null;
-    unidadeBase: string; estoqueMinimo?: number | null;
+    codigoBarras: string; unidadeBase: string; estoqueMinimo?: number | null;
   }): Promise<any>;
   update(id: string, data: Partial<{
     name: string; categoria: string | null; categoriaId: string | null; subcategoriaId: string | null;

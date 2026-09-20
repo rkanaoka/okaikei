@@ -250,6 +250,26 @@ export const etiquetasApi = {
     http.post('/estoque/etiquetas/layout/test', { etiqueta, layout }) as Promise<{ ok: boolean; error?: string }>,
 };
 
+// ── Etiquetas de Código de Barras (Controle de Estoque) ───────────────────────
+export type EtiquetaBarcodeLayoutConfig = {
+  offsetX: number; offsetY: number;
+  marginLeft: number; marginRight: number; marginTop: number; marginBottom: number;
+  fontSizeNome: number; barcodeHeight: number; moduleWidth: number; lineGap: number;
+  showCode: boolean;
+};
+
+export type ItemImpressaoBarcode = { insumoId: string; quantidade: number };
+
+export const etiquetasBarcodeApi = {
+  print: (itens: ItemImpressaoBarcode[]) => http.post('/estoque/etiquetas/codigo-barras/print', { itens }) as Promise<{ impressas: number }>,
+
+  getLayout:   () => http.get('/estoque/etiquetas/codigo-barras/layout') as Promise<EtiquetaBarcodeLayoutConfig>,
+  saveLayout:  (d: Partial<EtiquetaBarcodeLayoutConfig>) => http.put('/estoque/etiquetas/codigo-barras/layout', d) as Promise<EtiquetaBarcodeLayoutConfig>,
+  resetLayout: () => http.post('/estoque/etiquetas/codigo-barras/layout/reset', {}) as Promise<EtiquetaBarcodeLayoutConfig>,
+  testLayout:  (nome: string, codigoBarras: string, layout?: Partial<EtiquetaBarcodeLayoutConfig>) =>
+    http.post('/estoque/etiquetas/codigo-barras/layout/test', { nome, codigoBarras, layout }) as Promise<{ ok: boolean; error?: string }>,
+};
+
 // ── Sync ──────────────────────────────────────────────────────────────────────
 export const syncApi = {
   status: () => http.get('/sync/status'),
@@ -287,6 +307,7 @@ export type InsumoRow = {
   id: string; name: string; categoria: string | null;
   categoriaId: string | null; subcategoriaId: string | null;
   categoriaRel: { id: string; nome: string } | null; subcategoriaRel: { id: string; nome: string } | null;
+  codigoBarras: string | null;
   unidadeBase: UnidadeBase;
   estoqueAtual: string; estoqueMinimo: string | null; active: boolean;
   itensFornecedor: InsumoFornecedorItemRow[];

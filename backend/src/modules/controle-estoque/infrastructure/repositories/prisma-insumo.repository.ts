@@ -32,9 +32,13 @@ export class PrismaInsumoRepository implements InsumoRepositoryPort {
     return (this.prisma as any).insumoItem.findUnique({ where: { id }, include: INSUMO_INCLUDE });
   }
 
+  findByCodigoBarras(codigoBarras: string) {
+    return (this.prisma as any).insumoItem.findUnique({ where: { codigoBarras } });
+  }
+
   create(data: {
     id: string; name: string; categoria?: string | null; categoriaId?: string | null; subcategoriaId?: string | null;
-    unidadeBase: string; estoqueMinimo?: number | null;
+    codigoBarras: string; unidadeBase: string; estoqueMinimo?: number | null;
   }) {
     return (this.prisma as any).insumoItem.create({ data, include: INSUMO_INCLUDE });
   }

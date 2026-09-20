@@ -5,6 +5,7 @@ import {
 import {
   UnidadeBase, UnidadeMedida, resolverFatorConversao, unidadesParaBase,
 } from '@/modules/controle-estoque/domain/value-objects/unidade-conversao';
+import { gerarCodigoBarrasUnico } from '@/modules/controle-estoque/application/use-cases/insumo-codigo-barras.util';
 import { uuidv7 } from 'uuidv7';
 
 const UNIDADES_BASE_VALIDAS: UnidadeBase[] = ['MG', 'ML', 'UN'];
@@ -37,12 +38,14 @@ export class InsumosService {
     if (!UNIDADES_BASE_VALIDAS.includes(dto.unidadeBase)) {
       throw new BadRequestException('Unidade-base inválida. Use MG (massa), ML (volume) ou UN (contagem).');
     }
+    const codigoBarras = await gerarCodigoBarrasUnico(this.repo);
     return this.repo.create({
       id: uuidv7(),
       name: dto.name.trim(),
       categoria: dto.categoria?.trim() || null,
       categoriaId: dto.categoriaId || null,
       subcategoriaId: dto.subcategoriaId || null,
+      codigoBarras,
       unidadeBase: dto.unidadeBase,
       estoqueMinimo: dto.estoqueMinimo ?? null,
     });

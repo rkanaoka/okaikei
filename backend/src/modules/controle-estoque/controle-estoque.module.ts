@@ -13,6 +13,7 @@ import { NFE_XML_PARSER_PORT } from './application/contracts/nfe-xml-parser.port
 
 // Application — Use Cases (Services)
 import { GerarEtiquetasValidadeService } from './application/use-cases/gerar-etiquetas-validade.service';
+import { GerarEtiquetasBarcodeService } from './application/use-cases/gerar-etiquetas-barcode.service';
 import { InsumosService }                from './application/use-cases/insumos.service';
 import { InsumoCategoriasService }       from './application/use-cases/insumo-categorias.service';
 import { FornecedoresService }           from './application/use-cases/fornecedores.service';
@@ -29,6 +30,7 @@ import { FastXmlNfeParserAdapter }        from './infrastructure/parsers/fast-xm
 
 // Controllers
 import { EtiquetasController }    from '@/runtimes/api/controllers/etiquetas.controller';
+import { EtiquetasBarcodeController } from '@/runtimes/api/controllers/etiquetas-barcode.controller';
 import { InsumosController }      from '@/runtimes/api/controllers/insumos.controller';
 import { InsumoCategoriasController } from '@/runtimes/api/controllers/insumo-categorias.controller';
 import { FornecedoresController } from '@/runtimes/api/controllers/fornecedores.controller';
@@ -36,11 +38,13 @@ import { NfeImportController }    from '@/runtimes/api/controllers/nfe-import.co
 
 @Module({
   controllers: [
-    EtiquetasController, InsumosController, InsumoCategoriasController, FornecedoresController, NfeImportController,
+    EtiquetasController, EtiquetasBarcodeController, InsumosController, InsumoCategoriasController,
+    FornecedoresController, NfeImportController,
   ],
   providers: [
     // Services
     GerarEtiquetasValidadeService,
+    GerarEtiquetasBarcodeService,
     InsumosService,
     InsumoCategoriasService,
     FornecedoresService,
@@ -57,6 +61,9 @@ import { NfeImportController }    from '@/runtimes/api/controllers/nfe-import.co
     // Contract → Adapter bindings
     { provide: NFE_XML_PARSER_PORT, useClass: FastXmlNfeParserAdapter },
   ],
-  exports: [GerarEtiquetasValidadeService, InsumosService, InsumoCategoriasService, FornecedoresService, ImportarNfeService],
+  exports: [
+    GerarEtiquetasValidadeService, GerarEtiquetasBarcodeService, InsumosService, InsumoCategoriasService,
+    FornecedoresService, ImportarNfeService,
+  ],
 })
 export class ControleEstoqueModule {}

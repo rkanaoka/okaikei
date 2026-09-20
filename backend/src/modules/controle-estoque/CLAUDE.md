@@ -10,10 +10,12 @@ Bounded Context de Controle de Estoque. Expõe:
 ## Estrutura
 ```
 domain/
-  value-objects/unidade-conversao.ts   # Regras de conversão de unidades (puro, sem deps externas)
+  value-objects/
+    unidade-conversao.ts                # Regras de conversão de unidades (puro, sem deps externas)
+    ean8.ts                             # Geração/checksum de código de barras EAN-8 (puro)
   repositories/
     label-printer.port.ts              # Port: impressora de etiquetas
-    etiqueta-layout-repository.port.ts # Port: layout de impressão salvo
+    etiqueta-layout-repository.port.ts # Port: layout de impressão salvo (genérico, por chave)
     insumo-repository.port.ts          # Port: InsumoItem + InsumoFornecedorItem + movimentações
     insumo-categoria-repository.port.ts # Port: InsumoCategoria + InsumoSubcategoria
     fornecedor-repository.port.ts      # Port: Fornecedor
@@ -22,6 +24,10 @@ application/
   contracts/nfe-xml-parser.port.ts     # Port: leitura do XML da NF-e
   use-cases/
     gerar-etiquetas-validade.service.ts
+    etiqueta-layout-defaults.ts         # Layout/limites/defaults da etiqueta de validade
+    gerar-etiquetas-barcode.service.ts  # Impressão em lote de etiquetas de código de barras
+    etiqueta-barcode-layout-defaults.ts # Layout/limites/defaults da etiqueta de código de barras
+    insumo-codigo-barras.util.ts        # Gera código de barras único (usado por Insumos e Importar NF-e)
     insumos.service.ts                 # CRUD de insumos, marcas/fornecedores, entrada manual
     insumo-categorias.service.ts       # CRUD de categorias/subcategorias de insumo
     fornecedores.service.ts            # CRUD de fornecedores + extração de dados via XML de NF-e
@@ -30,7 +36,7 @@ infrastructure/
   printers/zpl-label-printer.adapter.ts
   parsers/fast-xml-nfe-parser.adapter.ts   # Adapter: fast-xml-parser
   repositories/
-    prisma-etiqueta-layout.repository.ts
+    prisma-etiqueta-layout.repository.ts  # Persiste em system_config, key/value — usado pelos 2 tipos de etiqueta
     prisma-insumo.repository.ts
     prisma-insumo-categoria.repository.ts
     prisma-fornecedor.repository.ts
@@ -43,6 +49,8 @@ controle-estoque.module.ts
   expresso na `unidadeBase` (MG, ML ou UN) — nunca na unidade de compra de um fornecedor.
   `categoriaId`/`subcategoriaId` (opcionais) apontam para `InsumoCategoria`/`InsumoSubcategoria`;
   a coluna `categoria` (texto livre) é legado, mantida só por compatibilidade.
+  `codigoBarras` (EAN-8, único) é gerado automaticamente na criação — manual ou via
+  importação de NF-e — ver `insumo-codigo-barras.util.ts`; nunca informado pelo usuário.
 - `InsumoCategoria` / `InsumoSubcategoria` — taxonomia de 2 níveis para organizar insumos
   (ex: categoria "Bebidas" → subcategoria "Refrigerantes"). Sem exclusão definitiva, só
   `active` (mesmo padrão de `MenuCategory`/Insumo — desativar em vez de apagar).
@@ -89,7 +97,11 @@ Focus NFe/PlugNotas/NFe.io). Fluxo em duas etapas:
 | LABEL_PRINTER_TIMEOUT_MS   | 5000            | Timeout de conexão TCP       |
 
 ## Endpoints
-- `POST /estoque/etiquetas/print` / `GET /estoque/etiquetas/status`
+- `POST /estoque/etiquetas/print` / `GET /estoque/etiquetas/status` — etiqueta de validade
+- `GET/PUT /estoque/etiquetas/layout`, `POST /estoque/etiquetas/layout/reset|test` — layout da etiqueta de validade
+- `POST /estoque/etiquetas/codigo-barras/print` — `{ itens: [{ insumoId, quantidade }] }`,
+  imprime em lote (mesma impressora/status de `/estoque/etiquetas`)
+- `GET/PUT /estoque/etiquetas/codigo-barras/layout`, `POST .../layout/reset|test` — layout da etiqueta de código de barras
 - `GET/POST/PUT/DELETE /estoque/insumos` — CRUD de insumos
 - `GET /estoque/insumos/unidades-medida` — tabela de unidades/fatores fixos
 - `POST /estoque/insumos/:id/fornecedores`, `PUT|DELETE /estoque/insumos/fornecedores/:id` — SKUs
