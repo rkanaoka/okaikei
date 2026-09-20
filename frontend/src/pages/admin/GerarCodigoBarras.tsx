@@ -3,15 +3,86 @@
  * Impressora: Elgin L42 Pro Full — etiqueta BOPP branco 60×30 mm (ZPL II), mesma
  * impressora configurada em "Gerar Etiquetas de Validade".
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { insumosApi, etiquetasApi, etiquetasBarcodeApi, InsumoRow, EtiquetaBarcodeLayoutConfig } from '@/services/api';
-import { BRAND, Card, PageHeader, Btn, TableHead, ModalShell, Field, inputStyle } from './shared';
+import { BRAND, Card, PageHeader, Btn, TableHead, ModalShell, inputStyle } from './shared';
 
 const DEFAULT_LAYOUT: EtiquetaBarcodeLayoutConfig = {
   offsetX: 0, offsetY: 0,
   marginLeft: 10, marginRight: 10, marginTop: 10, marginBottom: 10,
   fontSizeNome: 20, barcodeHeight: 100, moduleWidth: 3, lineGap: 8, showCode: true,
 };
+
+// ── EAN-8 — codificação em barras (mesma estrutura do padrão GS1 usada no ^BE do ZPL) ──
+const L_CODE = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'];
+const R_CODE = L_CODE.map(p => p.split('').map(b => (b === '1' ? '0' : '1')).join(''));
+
+function ean8Modulos(codigo: string): boolean[] {
+  const digitos = (codigo || '00000000').replace(/\D/g, '').padStart(8, '0').slice(0, 8).split('').map(Number);
+  const bits = ['101', ...digitos.slice(0, 4).map(d => L_CODE[d]), '01010', ...digitos.slice(4, 8).map(d => R_CODE[d]), '101'];
+  return bits.join('').split('').map(b => b === '1');
+}
+
+// ── Prévia da etiqueta 60×30 mm — espelha buildZplBloco() do backend em dots ──
+function EtiquetaBarcodePreview({ nome, codigoBarras, layout }: { nome: string; codigoBarras: string; layout: EtiquetaBarcodeLayoutConfig }) {
+  const W = 480, H = 240;
+  const scale = 0.8;
+  const L = layout;
+
+  const abbr = (v: string, max: number) => (v.length > max ? v.substring(0, max) + '…' : v);
+  const baseline = (topY: number, fontSize: number) => topY + Math.round(fontSize * 0.92);
+
+  const x0 = L.marginLeft + L.offsetX;
+  let y = L.marginTop + L.offsetY;
+
+  const nomeY = y;
+  y += L.fontSizeNome + L.lineGap;
+
+  const barras = ean8Modulos(codigoBarras);
+  const barcodeWidth = barras.length * L.moduleWidth;
+  const barcodeY = y;
+  let bx = x0;
+  const bars: React.ReactNode[] = barras.map((preto, i) => {
+    const rect = preto
+      ? <rect key={i} x={bx} y={barcodeY} width={L.moduleWidth} height={L.barcodeHeight} fill="#000" />
+      : null;
+    bx += L.moduleWidth;
+    return rect;
+  });
+  y += L.barcodeHeight;
+
+  const digitsY = y + 4;
+  if (L.showCode) y += 14;
+
+  const overflow = y > (H - L.marginBottom) || x0 < 0 || (x0 + barcodeWidth) > W;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      <div style={{ fontSize: 11, color: '#888', fontWeight: 600, letterSpacing: .5 }}>PRÉVIA — 60 × 30 mm</div>
+      <svg width={W * scale} height={H * scale} viewBox={`0 0 ${W} ${H}`}
+        style={{ border: '1px solid #ccc', borderRadius: 4, background: '#fff', display: 'block' }}>
+        <rect x={2 + L.offsetX} y={2 + L.offsetY} width="476" height="236" fill="none" stroke="#000" strokeWidth="2" />
+        <text x={x0} y={baseline(nomeY, L.fontSizeNome)} fontSize={L.fontSizeNome} fontWeight="bold" fontFamily="monospace" fill="#000">
+          {abbr(nome || 'NOME DO INSUMO', 26)}
+        </text>
+        {bars}
+        {L.showCode && (
+          <text x={x0} y={digitsY + 10} fontSize={12} fontFamily="monospace" letterSpacing="2" fill="#000">
+            {(codigoBarras || '00000000').padStart(8, '0')}
+          </text>
+        )}
+        {overflow && <rect x="1" y="1" width={W - 2} height={H - 2} fill="none" stroke={BRAND.red} strokeWidth="4" strokeDasharray="6,4" />}
+      </svg>
+      {overflow ? (
+        <div style={{ fontSize: 12, color: BRAND.red, fontWeight: 700, textAlign: 'center' }}>
+          ⚠️ Conteúdo ultrapassa a área da etiqueta — reduza fontes, altura do código ou offset
+        </div>
+      ) : (
+        <div style={{ fontSize: 11, color: '#aaa' }}>Preview em tempo real (não é escala exata)</div>
+      )}
+    </div>
+  );
+}
 
 const LAYOUT_FIELD_GROUPS: Array<{
   title: string;
@@ -165,6 +236,8 @@ export default function GerarCodigoBarras() {
   const [insumos, setInsumos] = useState<InsumoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selecionados, setSelecionados] = useState<Record<string, string>>({});
+  const [busca, setBusca] = useState('');
+  const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [online, setOnline] = useState<boolean | null>(null);
   const [layout, setLayout] = useState<EtiquetaBarcodeLayoutConfig>(DEFAULT_LAYOUT);
   const [showLayout, setShowLayout] = useState(false);
@@ -208,6 +281,20 @@ export default function GerarCodigoBarras() {
   const totalEtiquetas = itensSelecionados.reduce((s, i) => s + i.quantidade, 0);
   const primeiroSelecionado = insumos.find(i => selecionados[i.id] !== undefined) || null;
 
+  const categorias = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const i of insumos) if (i.categoriaRel) map.set(i.categoriaRel.id, i.categoriaRel.nome);
+    return Array.from(map, ([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [insumos]);
+
+  const insumosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return insumos.filter(i =>
+      (!categoriaFiltro || i.categoriaId === categoriaFiltro) &&
+      (!termo || i.name.toLowerCase().includes(termo)),
+    );
+  }, [insumos, busca, categoriaFiltro]);
+
   async function imprimir() {
     setConfirm(false); setPrinting(true); setError(''); setSuccess('');
     try {
@@ -248,45 +335,73 @@ export default function GerarCodigoBarras() {
         </div>
       )}
 
-      {loading ? <p style={{ color: '#aaa', fontSize: 13 }}>Carregando...</p> : (
-        <Card style={{ padding: 0, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <TableHead cols={['', 'Insumo', 'Código de barras', 'Quantidade']} />
-            <tbody>
-              {insumos.length === 0 && (
-                <tr><td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: '#ccc' }}>Nenhum insumo cadastrado</td></tr>
-              )}
-              {insumos.map(i => {
-                const marcado = selecionados[i.id] !== undefined;
-                return (
-                  <tr key={i.id} style={{ borderBottom: '1px solid #f5f5f5', opacity: i.active ? 1 : .5 }}>
-                    <td style={{ padding: '10px 16px' }}>
-                      <input type="checkbox" checked={marcado} disabled={!i.codigoBarras}
-                        onChange={e => toggle(i.id, e.target.checked)} />
-                    </td>
-                    <td style={{ padding: '10px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name}</td>
-                    <td style={{ padding: '10px 16px', color: '#888', fontFamily: 'monospace' }}>
-                      {i.codigoBarras || 'sem código'}
-                    </td>
-                    <td style={{ padding: '10px 16px' }}>
-                      <input
-                        style={{ ...inputStyle, width: 80 }} type="number" min={1} max={100}
-                        value={selecionados[i.id] ?? ''} disabled={!marcado}
-                        onChange={e => setQuantidade(i.id, e.target.value)}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 24, alignItems: 'start' }}>
+        <div>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+            <input
+              style={{ ...inputStyle, flex: 1, minWidth: 220 }} placeholder="Buscar insumo pelo nome..."
+              value={busca} onChange={e => setBusca(e.target.value)}
+            />
+            <select style={{ ...inputStyle, width: 220 }} value={categoriaFiltro} onChange={e => setCategoriaFiltro(e.target.value)}>
+              <option value="">Todas as categorias</option>
+              {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-        <Btn onClick={() => setConfirm(true)} disabled={printing || itensSelecionados.length === 0}>
-          {printing ? 'Imprimindo...' : `🖨️ Imprimir Selecionados (${totalEtiquetas})`}
-        </Btn>
+          {loading ? <p style={{ color: '#aaa', fontSize: 13 }}>Carregando...</p> : (
+            <Card style={{ padding: 0, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <TableHead cols={['', 'Insumo', 'Código de barras', 'Quantidade']} />
+                <tbody>
+                  {insumosFiltrados.length === 0 && (
+                    <tr><td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: '#ccc' }}>
+                      {insumos.length === 0 ? 'Nenhum insumo cadastrado' : 'Nenhum insumo encontrado para esse filtro'}
+                    </td></tr>
+                  )}
+                  {insumosFiltrados.map(i => {
+                    const marcado = selecionados[i.id] !== undefined;
+                    return (
+                      <tr key={i.id} style={{ borderBottom: '1px solid #f5f5f5', opacity: i.active ? 1 : .5 }}>
+                        <td style={{ padding: '10px 16px' }}>
+                          <input type="checkbox" checked={marcado} disabled={!i.codigoBarras}
+                            onChange={e => toggle(i.id, e.target.checked)} />
+                        </td>
+                        <td style={{ padding: '10px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name}</td>
+                        <td style={{ padding: '10px 16px', color: '#888', fontFamily: 'monospace' }}>
+                          {i.codigoBarras || 'sem código'}
+                        </td>
+                        <td style={{ padding: '10px 16px' }}>
+                          <input
+                            style={{ ...inputStyle, width: 80 }} type="number" min={1} max={100}
+                            value={selecionados[i.id] ?? ''} disabled={!marcado}
+                            onChange={e => setQuantidade(i.id, e.target.value)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Card>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+            <Btn onClick={() => setConfirm(true)} disabled={printing || itensSelecionados.length === 0}>
+              {printing ? 'Imprimindo...' : `🖨️ Imprimir Selecionados (${totalEtiquetas})`}
+            </Btn>
+          </div>
+        </div>
+
+        <Card style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
+          <EtiquetaBarcodePreview
+            nome={primeiroSelecionado?.name || ''} codigoBarras={primeiroSelecionado?.codigoBarras || ''} layout={layout}
+          />
+          <div style={{ width: '100%', padding: '12px 16px', borderRadius: 8, background: '#f8f9fa', fontSize: 12, color: '#666', lineHeight: 1.6 }}>
+            <strong>Layout ZPL — Elgin L42 Pro Full</strong><br />
+            Etiqueta BOPP branco · 60×30 mm · 203 DPI<br />
+            {primeiroSelecionado ? 'Prévia do primeiro insumo marcado na lista.' : 'Marque um insumo na lista para ver a prévia real.'}
+          </div>
+        </Card>
       </div>
 
       {confirm && (
