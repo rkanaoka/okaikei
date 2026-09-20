@@ -26,12 +26,18 @@ export class InsumosController {
   }
 
   @Post()
-  create(@Body() body: { name: string; categoria?: string; unidadeBase: 'MG' | 'ML' | 'UN'; estoqueMinimo?: number }) {
+  create(@Body() body: {
+    name: string; categoria?: string; categoriaId?: string | null; subcategoriaId?: string | null;
+    unidadeBase: 'MG' | 'ML' | 'UN'; estoqueMinimo?: number;
+  }) {
     return this.insumos.create(body);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() body: Partial<{ name: string; categoria: string | null; estoqueMinimo: number | null; active: boolean }>) {
+  update(@Param('id') id: string, @Body() body: Partial<{
+    name: string; categoria: string | null; categoriaId: string | null; subcategoriaId: string | null;
+    estoqueMinimo: number | null; active: boolean;
+  }>) {
     return this.insumos.update(id, body);
   }
 

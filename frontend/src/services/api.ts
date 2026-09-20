@@ -261,8 +261,19 @@ export type UnidadeBase = 'MG' | 'ML' | 'UN';
 export type UnidadeMedida = 'MG'|'G'|'KG'|'ML'|'L'|'UN'|'DUZIA'|'CAIXA'|'PACOTE'|'FARDO'|'OUTRO';
 export type UnidadeInfo = { base: UnidadeBase; fatorFixo: number | null; label: string };
 
-export type FornecedorRow = {
-  id: string; nome: string; cnpj: string | null; telefone: string | null; email: string | null; active: boolean;
+export type FornecedorDadosOpcionais = {
+  nomeFantasia?: string | null; ie?: string | null; telefone?: string | null; email?: string | null;
+  logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null;
+  municipio?: string | null; uf?: string | null; cep?: string | null;
+  representanteNome?: string | null; representanteTelefone?: string | null; representanteEmail?: string | null;
+};
+
+export type FornecedorRow = { id: string; nome: string; cnpj: string | null; active: boolean } & FornecedorDadosOpcionais;
+
+export type NfeEmitenteParseado = {
+  cnpj: string | null; nome: string | null; nomeFantasia: string | null; ie: string | null; telefone: string | null;
+  logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null;
+  municipio: string | null; uf: string | null; cep: string | null;
 };
 
 export type InsumoFornecedorItemRow = {
@@ -273,16 +284,34 @@ export type InsumoFornecedorItemRow = {
 };
 
 export type InsumoRow = {
-  id: string; name: string; categoria: string | null; unidadeBase: UnidadeBase;
+  id: string; name: string; categoria: string | null;
+  categoriaId: string | null; subcategoriaId: string | null;
+  categoriaRel: { id: string; nome: string } | null; subcategoriaRel: { id: string; nome: string } | null;
+  unidadeBase: UnidadeBase;
   estoqueAtual: string; estoqueMinimo: string | null; active: boolean;
   itensFornecedor: InsumoFornecedorItemRow[];
 };
 
 export const fornecedoresApi = {
   list:   (all = false) => http.get('/estoque/fornecedores', { params: all ? { all: 'true' } : {} }) as Promise<FornecedorRow[]>,
-  create: (d: { nome: string; cnpj?: string; telefone?: string; email?: string }) => http.post('/estoque/fornecedores', d),
-  update: (id: string, d: Partial<{ nome: string; cnpj: string | null; telefone: string | null; email: string | null; active: boolean }>) =>
+  create: (d: { nome: string; cnpj?: string } & FornecedorDadosOpcionais) => http.post('/estoque/fornecedores', d),
+  update: (id: string, d: Partial<{ nome: string; cnpj: string | null; active: boolean } & FornecedorDadosOpcionais>) =>
     http.put(`/estoque/fornecedores/${id}`, d),
+  remove: (id: string) => http.delete(`/estoque/fornecedores/${id}`),
+  parseNfe: (xml: string) => http.post('/estoque/fornecedores/nfe-emitente', { xml }) as Promise<NfeEmitenteParseado>,
+};
+
+// ── Categorias/Subcategorias de Insumo ────────────────────────────────────────
+export type InsumoSubcategoriaRow = { id: string; categoriaId: string; nome: string; sortOrder: number; active: boolean };
+export type InsumoCategoriaRow = { id: string; nome: string; sortOrder: number; active: boolean; subcategorias: InsumoSubcategoriaRow[] };
+
+export const categoriasInsumoApi = {
+  list:   (all = false) => http.get('/estoque/categorias', { params: all ? { all: 'true' } : {} }) as Promise<InsumoCategoriaRow[]>,
+  create: (d: { nome: string }) => http.post('/estoque/categorias', d),
+  update: (id: string, d: Partial<{ nome: string; sortOrder: number; active: boolean }>) => http.put(`/estoque/categorias/${id}`, d),
+  createSubcategoria: (categoriaId: string, d: { nome: string }) => http.post(`/estoque/categorias/${categoriaId}/subcategorias`, d),
+  updateSubcategoria: (id: string, d: Partial<{ nome: string; sortOrder: number; active: boolean }>) =>
+    http.put(`/estoque/categorias/subcategorias/${id}`, d),
 };
 
 export const insumosApi = {
@@ -291,8 +320,9 @@ export const insumosApi = {
 
   list:   (all = false) => http.get('/estoque/insumos', { params: all ? { all: 'true' } : {} }) as Promise<InsumoRow[]>,
   get:    (id: string) => http.get(`/estoque/insumos/${id}`) as Promise<InsumoRow>,
-  create: (d: { name: string; categoria?: string; unidadeBase: UnidadeBase; estoqueMinimo?: number }) => http.post('/estoque/insumos', d),
-  update: (id: string, d: Partial<{ name: string; categoria: string | null; estoqueMinimo: number | null; active: boolean }>) =>
+  create: (d: { name: string; categoria?: string; categoriaId?: string | null; subcategoriaId?: string | null; unidadeBase: UnidadeBase; estoqueMinimo?: number }) =>
+    http.post('/estoque/insumos', d),
+  update: (id: string, d: Partial<{ name: string; categoria: string | null; categoriaId: string | null; subcategoriaId: string | null; estoqueMinimo: number | null; active: boolean }>) =>
     http.put(`/estoque/insumos/${id}`, d),
   remove: (id: string) => http.delete(`/estoque/insumos/${id}`),
 
@@ -324,7 +354,7 @@ export type NfeItemPreview = {
 export type NfePreviewResult = {
   chaveAcesso: string; numero: string | null; serie: string | null;
   dataEmissao: string | null; valorTotal: number | null;
-  fornecedor: { cnpj: string | null; nome: string | null };
+  fornecedor: NfeEmitenteParseado;
   fornecedorCadastrado: boolean; jaImportada: boolean; itens: NfeItemPreview[];
 };
 

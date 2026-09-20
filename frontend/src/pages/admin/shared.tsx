@@ -173,6 +173,32 @@ export function Btn({ children, onClick, variant='primary', small=false, disable
   );
 }
 
+export const inputStyle: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box', border: '1.5px solid #dde', borderRadius: 8,
+  padding: '9px 11px', fontSize: 13, outline: 'none', fontFamily: 'inherit',
+};
+export const labelStyle: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 700, color: '#666', marginBottom: 5 };
+
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div style={{ marginBottom: 14 }}><label style={labelStyle}>{label}</label>{children}</div>;
+}
+
+export function ModalShell({ title, width = 480, onClose, children }: { title: string; width?: number; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 200,
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '24px 0' }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 28, width, maxWidth: '92vw',
+        boxShadow: '0 20px 60px rgba(0,0,0,.25)', margin: 'auto 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: BRAND.navy }}>{title}</h2>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', fontSize: 22, lineHeight: 1, cursor: 'pointer', color: '#999' }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function TableHead({ cols }: { cols: string[] }) {
   return (
     <thead>

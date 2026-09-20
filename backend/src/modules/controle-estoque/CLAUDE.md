@@ -15,6 +15,7 @@ domain/
     label-printer.port.ts              # Port: impressora de etiquetas
     etiqueta-layout-repository.port.ts # Port: layout de impressão salvo
     insumo-repository.port.ts          # Port: InsumoItem + InsumoFornecedorItem + movimentações
+    insumo-categoria-repository.port.ts # Port: InsumoCategoria + InsumoSubcategoria
     fornecedor-repository.port.ts      # Port: Fornecedor
     nota-fiscal-repository.port.ts     # Port: NotaFiscalImportada
 application/
@@ -22,7 +23,8 @@ application/
   use-cases/
     gerar-etiquetas-validade.service.ts
     insumos.service.ts                 # CRUD de insumos, marcas/fornecedores, entrada manual
-    fornecedores.service.ts            # CRUD de fornecedores
+    insumo-categorias.service.ts       # CRUD de categorias/subcategorias de insumo
+    fornecedores.service.ts            # CRUD de fornecedores + extração de dados via XML de NF-e
     importar-nfe.service.ts            # Preview + confirmação da importação de NF-e
 infrastructure/
   printers/zpl-label-printer.adapter.ts
@@ -30,6 +32,7 @@ infrastructure/
   repositories/
     prisma-etiqueta-layout.repository.ts
     prisma-insumo.repository.ts
+    prisma-insumo-categoria.repository.ts
     prisma-fornecedor.repository.ts
     prisma-nota-fiscal.repository.ts
 controle-estoque.module.ts
@@ -38,11 +41,18 @@ controle-estoque.module.ts
 ## Modelo de dados (Prisma)
 - `InsumoItem` — item canônico de estoque (ex: "Arroz"). Saldo (`estoqueAtual`) sempre
   expresso na `unidadeBase` (MG, ML ou UN) — nunca na unidade de compra de um fornecedor.
+  `categoriaId`/`subcategoriaId` (opcionais) apontam para `InsumoCategoria`/`InsumoSubcategoria`;
+  a coluna `categoria` (texto livre) é legado, mantida só por compatibilidade.
+- `InsumoCategoria` / `InsumoSubcategoria` — taxonomia de 2 níveis para organizar insumos
+  (ex: categoria "Bebidas" → subcategoria "Refrigerantes"). Sem exclusão definitiva, só
+  `active` (mesmo padrão de `MenuCategory`/Insumo — desativar em vez de apagar).
 - `InsumoFornecedorItem` — uma "SKU" de compra: marca + fornecedor + unidade de compra +
   fator de conversão para a unidadeBase. Um mesmo `InsumoItem` pode ter várias linhas
   (marcas/embalagens diferentes).
-- `Fornecedor` — cadastro mínimo (nome, CNPJ), criado automaticamente na importação de
-  NF-e quando o CNPJ do emitente ainda não existe.
+- `Fornecedor` — nome, nome fantasia, CNPJ, IE, endereço completo, telefone/email da
+  empresa e dados do representante comercial (`representanteNome/Telefone/Email`). Criado
+  automaticamente (com todos os campos disponíveis no XML) na importação de NF-e quando o
+  CNPJ do emitente ainda não existe.
 - `MovimentacaoEstoque` — kardex: toda entrada/saída/ajuste de estoque, com origem
   (MANUAL | NFE) e, quando aplicável, a nota fiscal de origem.
 - `NotaFiscalImportada` — uma linha por NF-e importada (chave de acesso única — impede
@@ -84,5 +94,9 @@ Focus NFe/PlugNotas/NFe.io). Fluxo em duas etapas:
 - `GET /estoque/insumos/unidades-medida` — tabela de unidades/fatores fixos
 - `POST /estoque/insumos/:id/fornecedores`, `PUT|DELETE /estoque/insumos/fornecedores/:id` — SKUs
 - `POST /estoque/insumos/:id/entrada` — entrada manual de estoque
-- `GET/POST/PUT /estoque/fornecedores` — CRUD de fornecedores
+- `GET/POST /estoque/categorias`, `PUT /estoque/categorias/:id` — CRUD de categorias
+- `POST /estoque/categorias/:categoriaId/subcategorias`, `PUT /estoque/categorias/subcategorias/:id` — CRUD de subcategorias
+- `GET/POST/PUT/DELETE /estoque/fornecedores` — CRUD de fornecedores (`DELETE` = inativar)
+- `POST /estoque/fornecedores/nfe-emitente` — lê `{ xml }` e devolve os dados do emitente
+  (nome, nome fantasia, CNPJ, IE, endereço, telefone) para pré-preencher o cadastro, sem gravar nada
 - `POST /estoque/insumos/nfe/preview` / `POST /estoque/insumos/nfe/confirmar` — importação de NF-e

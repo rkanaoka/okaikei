@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  insumosApi, fornecedoresApi, nfeImportApi,
-  InsumoRow, FornecedorRow,
+  insumosApi, fornecedoresApi, nfeImportApi, categoriasInsumoApi,
+  InsumoRow, FornecedorRow, InsumoCategoriaRow,
   UnidadeBase, UnidadeMedida, UnidadeInfo,
   NfePreviewResult, NfeItemPreview, NfeItemConfirmacao,
 } from '@/services/api';
-import { BRAND, Card, PageHeader, Btn, TableHead } from './shared';
+import { BRAND, Card, PageHeader, Btn, TableHead, ModalShell, Field, inputStyle } from './shared';
 
 // ── Helpers de exibição ──────────────────────────────────────────────────────
 
@@ -26,32 +26,6 @@ function formatEstoque(valorRaw: string | number | null | undefined, base: Unida
     return `${v.toLocaleString('pt-BR')} ml`;
   }
   return `${v.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} un`;
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', boxSizing: 'border-box', border: '1.5px solid #dde', borderRadius: 8,
-  padding: '9px 11px', fontSize: 13, outline: 'none', fontFamily: 'inherit',
-};
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 700, color: '#666', marginBottom: 5 };
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div style={{ marginBottom: 14 }}><label style={labelStyle}>{label}</label>{children}</div>;
-}
-
-function ModalShell({ title, width = 480, onClose, children }: { title: string; width?: number; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 200,
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '24px 0' }}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: 28, width, maxWidth: '92vw',
-        boxShadow: '0 20px 60px rgba(0,0,0,.25)', margin: 'auto 0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: BRAND.navy }}>{title}</h2>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', fontSize: 22, lineHeight: 1, cursor: 'pointer', color: '#999' }}>×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 // ── Página principal ──────────────────────────────────────────────────────────
@@ -85,16 +59,17 @@ function ItensEstoqueTab() {
   const [insumos, setInsumos] = useState<InsumoRow[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorRow[]>([]);
   const [unidades, setUnidades] = useState<Record<UnidadeMedida, UnidadeInfo>>({} as any);
+  const [categorias, setCategorias] = useState<InsumoCategoriaRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [novoForm, setNovoForm] = useState<{ name: string; categoria: string; unidadeBase: UnidadeBase; estoqueMinimo: string } | null>(null);
+  const [novoForm, setNovoForm] = useState<{ name: string; categoriaId: string; subcategoriaId: string; unidadeBase: UnidadeBase; estoqueMinimo: string } | null>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [err, setErr] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [i, f, u] = await Promise.all([insumosApi.list(), fornecedoresApi.list(), insumosApi.unidadesMedida()]);
-      setInsumos(i); setFornecedores(f); setUnidades(u);
+      const [i, f, u, c] = await Promise.all([insumosApi.list(), fornecedoresApi.list(), insumosApi.unidadesMedida(), categoriasInsumoApi.list()]);
+      setInsumos(i); setFornecedores(f); setUnidades(u); setCategorias(c);
     } catch { /* noop */ }
     finally { setLoading(false); }
   }, []);
@@ -106,7 +81,8 @@ function ItensEstoqueTab() {
     try {
       const criado: any = await insumosApi.create({
         name: novoForm.name.trim(),
-        categoria: novoForm.categoria.trim() || undefined,
+        categoriaId: novoForm.categoriaId || undefined,
+        subcategoriaId: novoForm.subcategoriaId || undefined,
         unidadeBase: novoForm.unidadeBase,
         estoqueMinimo: novoForm.estoqueMinimo ? parseFloat(novoForm.estoqueMinimo) : undefined,
       });
@@ -121,7 +97,7 @@ function ItensEstoqueTab() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-        <Btn onClick={() => setNovoForm({ name: '', categoria: '', unidadeBase: 'UN', estoqueMinimo: '' })}>+ Novo Insumo</Btn>
+        <Btn onClick={() => setNovoForm({ name: '', categoriaId: '', subcategoriaId: '', unidadeBase: 'UN', estoqueMinimo: '' })}>+ Novo Insumo</Btn>
       </div>
 
       {loading ? <p style={{ color: '#aaa', fontSize: 13 }}>Carregando...</p> : (
@@ -137,7 +113,9 @@ function ItensEstoqueTab() {
                 return (
                   <tr key={i.id} style={{ borderBottom: '1px solid #f5f5f5', opacity: i.active ? 1 : .5 }}>
                     <td style={{ padding: '12px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name}</td>
-                    <td style={{ padding: '12px 16px', color: '#888' }}>{i.categoria || '—'}</td>
+                    <td style={{ padding: '12px 16px', color: '#888' }}>
+                      {i.categoriaRel ? [i.categoriaRel.nome, i.subcategoriaRel?.nome].filter(Boolean).join(' / ') : (i.categoria || '—')}
+                    </td>
                     <td style={{ padding: '12px 16px', color: '#888' }}>{UNIDADE_BASE_LABEL[i.unidadeBase]}</td>
                     <td style={{ padding: '12px 16px', fontWeight: 700, color: abaixoDoMinimo ? BRAND.red : BRAND.navy }}>
                       {formatEstoque(i.estoqueAtual, i.unidadeBase)}
@@ -162,10 +140,10 @@ function ItensEstoqueTab() {
             <input style={inputStyle} value={novoForm.name} onChange={e => setNovoForm({ ...novoForm, name: e.target.value })}
               placeholder="Ex: Arroz, Filé de Salmão, Molho Shoyu" />
           </Field>
-          <Field label="Categoria (opcional)">
-            <input style={inputStyle} value={novoForm.categoria} onChange={e => setNovoForm({ ...novoForm, categoria: e.target.value })}
-              placeholder="Ex: Grãos, Peixes, Bebidas" />
-          </Field>
+          <CategoriaSubcategoriaFields
+            categorias={categorias} categoriaId={novoForm.categoriaId} subcategoriaId={novoForm.subcategoriaId}
+            onChange={(categoriaId, subcategoriaId) => setNovoForm({ ...novoForm, categoriaId, subcategoriaId })}
+          />
           <Field label="Tipo de medida">
             <select style={inputStyle} value={novoForm.unidadeBase} onChange={e => setNovoForm({ ...novoForm, unidadeBase: e.target.value as UnidadeBase })}>
               {(Object.keys(UNIDADE_BASE_LABEL) as UnidadeBase[]).map(b => <option key={b} value={b}>{UNIDADE_BASE_LABEL[b]}</option>)}
@@ -188,6 +166,7 @@ function ItensEstoqueTab() {
           insumo={detalhe}
           fornecedores={fornecedores}
           unidades={unidades}
+          categorias={categorias}
           onClose={() => setDetalheId(null)}
           onChanged={load}
         />
@@ -196,14 +175,40 @@ function ItensEstoqueTab() {
   );
 }
 
+// ── Campos de categoria/subcategoria (dropdown dependente) ────────────────────
+
+function CategoriaSubcategoriaFields({ categorias, categoriaId, subcategoriaId, onChange }: {
+  categorias: InsumoCategoriaRow[]; categoriaId: string; subcategoriaId: string;
+  onChange: (categoriaId: string, subcategoriaId: string) => void;
+}) {
+  const categoriaAtual = categorias.find(c => c.id === categoriaId);
+  const subcategorias = categoriaAtual?.subcategorias.filter(s => s.active) ?? [];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <Field label="Categoria (opcional)">
+        <select style={inputStyle} value={categoriaId} onChange={e => onChange(e.target.value, '')}>
+          <option value="">Sem categoria</option>
+          {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+        </select>
+      </Field>
+      <Field label="Subcategoria (opcional)">
+        <select style={inputStyle} value={subcategoriaId} disabled={!categoriaAtual} onChange={e => onChange(categoriaId, e.target.value)}>
+          <option value="">Sem subcategoria</option>
+          {subcategorias.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+        </select>
+      </Field>
+    </div>
+  );
+}
+
 // ── Modal de detalhe do insumo (edição, marcas/fornecedores, entrada manual) ──
 
-function InsumoDetalheModal({ insumo, fornecedores, unidades, onClose, onChanged }: {
+function InsumoDetalheModal({ insumo, fornecedores, unidades, categorias, onClose, onChanged }: {
   insumo: InsumoRow; fornecedores: FornecedorRow[]; unidades: Record<UnidadeMedida, UnidadeInfo>;
-  onClose: () => void; onChanged: () => Promise<void> | void;
+  categorias: InsumoCategoriaRow[]; onClose: () => void; onChanged: () => Promise<void> | void;
 }) {
   const [basic, setBasic] = useState({
-    name: insumo.name, categoria: insumo.categoria || '',
+    name: insumo.name, categoriaId: insumo.categoriaId || '', subcategoriaId: insumo.subcategoriaId || '',
     estoqueMinimo: insumo.estoqueMinimo != null ? String(insumo.estoqueMinimo) : '',
   });
   const [savingBasic, setSavingBasic] = useState(false);
@@ -220,7 +225,8 @@ function InsumoDetalheModal({ insumo, fornecedores, unidades, onClose, onChanged
     try {
       await insumosApi.update(insumo.id, {
         name: basic.name.trim(),
-        categoria: basic.categoria.trim() || null,
+        categoriaId: basic.categoriaId || null,
+        subcategoriaId: basic.subcategoriaId || null,
         estoqueMinimo: basic.estoqueMinimo === '' ? null : parseFloat(basic.estoqueMinimo),
       });
       await onChanged();
@@ -235,10 +241,11 @@ function InsumoDetalheModal({ insumo, fornecedores, unidades, onClose, onChanged
 
   return (
     <ModalShell title={`Insumo — ${insumo.name}`} width={700} onClose={onClose}>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-        <Field label="Nome"><input style={inputStyle} value={basic.name} onChange={e => setBasic({ ...basic, name: e.target.value })} /></Field>
-        <Field label="Categoria"><input style={inputStyle} value={basic.categoria} onChange={e => setBasic({ ...basic, categoria: e.target.value })} /></Field>
-      </div>
+      <Field label="Nome"><input style={inputStyle} value={basic.name} onChange={e => setBasic({ ...basic, name: e.target.value })} /></Field>
+      <CategoriaSubcategoriaFields
+        categorias={categorias} categoriaId={basic.categoriaId} subcategoriaId={basic.subcategoriaId}
+        onChange={(categoriaId, subcategoriaId) => setBasic({ ...basic, categoriaId, subcategoriaId })}
+      />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Field label="Estoque atual">
           <div style={{ ...inputStyle, background: '#f8f9fa', fontWeight: 700, color: BRAND.navy }}>

@@ -1,6 +1,6 @@
 import { Inject, Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import {
-  NFE_XML_PARSER_PORT, NfeXmlParserPort,
+  NFE_XML_PARSER_PORT, NfeXmlParserPort, NfeParseada,
 } from '@/modules/controle-estoque/application/contracts/nfe-xml-parser.port';
 import {
   INSUMO_REPOSITORY_PORT, InsumoRepositoryPort,
@@ -38,7 +38,7 @@ export interface NfePreviewResult {
   serie: string | null;
   dataEmissao: string | null;
   valorTotal: number | null;
-  fornecedor: { cnpj: string | null; nome: string | null };
+  fornecedor: NfeParseada['fornecedor'];
   fornecedorCadastrado: boolean;
   jaImportada: boolean;
   itens: NfeItemPreview[];
@@ -120,7 +120,7 @@ export class ImportarNfeService {
     const jaImportada = await this.notaRepo.findByChave(nfe.chaveAcesso);
     if (jaImportada) throw new ConflictException('Esta NF-e já foi importada anteriormente.');
 
-    const fornecedor = nfe.fornecedor.cnpj ? await this.fornecedorOuCriar(nfe.fornecedor.cnpj, nfe.fornecedor.nome) : null;
+    const fornecedor = nfe.fornecedor.cnpj ? await this.fornecedorOuCriar(nfe.fornecedor) : null;
 
     const nota = await this.notaRepo.create({
       id: uuidv7(),
@@ -205,10 +205,24 @@ export class ImportarNfeService {
     return { notaFiscalId: nota.id, numero: nfe.numero, itensProcessados: resumo.length, itens: resumo };
   }
 
-  private async fornecedorOuCriar(cnpjRaw: string, nome: string | null) {
-    const cnpj = cnpjRaw.replace(/\D/g, '');
+  private async fornecedorOuCriar(dadosEmitente: NfeParseada['fornecedor']) {
+    const cnpj = (dadosEmitente.cnpj ?? '').replace(/\D/g, '');
     const existing = await this.fornecedorRepo.findByCnpj(cnpj);
     if (existing) return existing;
-    return this.fornecedorRepo.create({ id: uuidv7(), nome: nome?.trim() || cnpj, cnpj });
+    return this.fornecedorRepo.create({
+      id: uuidv7(),
+      nome: dadosEmitente.nome?.trim() || cnpj,
+      cnpj,
+      nomeFantasia: dadosEmitente.nomeFantasia,
+      ie: dadosEmitente.ie,
+      telefone: dadosEmitente.telefone,
+      logradouro: dadosEmitente.logradouro,
+      numero: dadosEmitente.numero,
+      complemento: dadosEmitente.complemento,
+      bairro: dadosEmitente.bairro,
+      municipio: dadosEmitente.municipio,
+      uf: dadosEmitente.uf,
+      cep: dadosEmitente.cep,
+    });
   }
 }

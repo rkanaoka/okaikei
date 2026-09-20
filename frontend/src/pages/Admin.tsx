@@ -23,6 +23,8 @@ import ModelosImpressao     from './admin/ModelosImpressao';
 import ConfigLoja           from './admin/ConfigLoja';
 import GerarEtiquetas       from './admin/GerarEtiquetas';
 import Insumos              from './admin/Insumos';
+import CategoriasInsumo     from './admin/CategoriasInsumo';
+import Fornecedores         from './admin/Fornecedores';
 import Garcons              from './admin/Garcons';
 import MesasComandas        from './admin/MesasComandas';
 
@@ -33,7 +35,7 @@ type SectionId =
   | 'fin-pagamentos' | 'fin-gorjetas' | 'fin-frentes-caixa'
   | 'rel-clientes'   | 'rel-cupons' | 'rel-parcerias'
   | 'rel-itens'      | 'rel-faturamento' | 'rel-pedidos' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
-  | 'estoque-itens' | 'estoque-etiquetas'
+  | 'estoque-itens' | 'estoque-categorias' | 'estoque-fornecedores' | 'estoque-etiquetas'
   | 'config-loja'    | 'config-horarios' | 'config-fiscal'
   | 'config-cancelamento' | 'config-desconto' | 'config-impressao' | 'config-usuarios' | 'config-garcons' | 'config-mesas';
 
@@ -66,8 +68,10 @@ const NAV: Array<
     { id:'rel-extrato-notion',     label:'Importar Extrato Bancário (Notion)' },
   ]},
   { type:'group', label:'Estoque', icon:'📦', permission:'estoque', items:[
-    { id:'estoque-itens',     label:'Itens de Estoque' },
-    { id:'estoque-etiquetas', label:'Gerar Etiquetas de Validade' },
+    { id:'estoque-itens',        label:'Itens de Estoque' },
+    { id:'estoque-categorias',   label:'Categorias de Insumos' },
+    { id:'estoque-fornecedores', label:'Fornecedores' },
+    { id:'estoque-etiquetas',    label:'Gerar Etiquetas de Validade' },
   ]},
   { type:'group', label:'Configurações', icon:'⚙️', permission:'configuracoes', items:[
     { id:'config-loja',          label:'Dados da loja' },
@@ -131,6 +135,8 @@ function renderSection(id: SectionId) {
       </div>
     );
     case 'estoque-itens':       return <Insumos />;
+    case 'estoque-categorias':  return <CategoriasInsumo />;
+    case 'estoque-fornecedores': return <Fornecedores />;
     case 'estoque-etiquetas':   return <GerarEtiquetas />;
     case 'config-loja':         return <ConfigLoja />;
     case 'config-horarios':     return <EmptyPlaceholder icon="🕐" title="Horários de Funcionamento" subtitle="Módulo em desenvolvimento" />;

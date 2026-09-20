@@ -4,10 +4,12 @@ export interface InsumoRepositoryPort {
   findAll(includeInactive?: boolean): Promise<any[]>;
   findById(id: string): Promise<any | null>;
   create(data: {
-    id: string; name: string; categoria?: string | null; unidadeBase: string; estoqueMinimo?: number | null;
+    id: string; name: string; categoria?: string | null; categoriaId?: string | null; subcategoriaId?: string | null;
+    unidadeBase: string; estoqueMinimo?: number | null;
   }): Promise<any>;
   update(id: string, data: Partial<{
-    name: string; categoria: string | null; estoqueMinimo: number | null; active: boolean;
+    name: string; categoria: string | null; categoriaId: string | null; subcategoriaId: string | null;
+    estoqueMinimo: number | null; active: boolean;
   }>): Promise<any>;
 
   // ── Itens de fornecedor (marca/embalagem de compra de um insumo) ────────────

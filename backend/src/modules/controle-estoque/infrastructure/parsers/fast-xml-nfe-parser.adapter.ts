@@ -16,6 +16,30 @@ function num(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function str(v: any): string | null {
+  const s = v !== undefined && v !== null ? String(v).trim() : '';
+  return s || null;
+}
+
+/** Extrai os dados do emitente (empresa fornecedora) do nó `emit` da NF-e, endereço incluso. */
+function mapEmitente(emit: any): NfeParseada['fornecedor'] {
+  const ender = emit.enderEmit ?? {};
+  return {
+    cnpj: emit.CNPJ ? String(emit.CNPJ).replace(/\D/g, '') : null,
+    nome: str(emit.xNome),
+    nomeFantasia: str(emit.xFant),
+    ie: str(emit.IE),
+    telefone: ender.fone ? String(ender.fone).replace(/\D/g, '') : null,
+    logradouro: str(ender.xLgr),
+    numero: str(ender.nro),
+    complemento: str(ender.xCpl),
+    bairro: str(ender.xBairro),
+    municipio: str(ender.xMun),
+    uf: str(ender.UF),
+    cep: ender.CEP ? String(ender.CEP).replace(/\D/g, '') : null,
+  };
+}
+
 /** Lê o XML de uma NF-e (padrão nfeProc/NFe da SEFAZ) e extrai os dados de interesse
  *  para a entrada de estoque: chave de acesso, emitente e itens (det/prod). */
 @Injectable()
@@ -71,10 +95,7 @@ export class FastXmlNfeParserAdapter implements NfeXmlParserPort {
       serie: ide.serie != null ? String(ide.serie) : null,
       dataEmissao: ide.dhEmi ? String(ide.dhEmi) : (ide.dEmi ? String(ide.dEmi) : null),
       valorTotal: total.vNF != null ? num(total.vNF) : null,
-      fornecedor: {
-        cnpj: emit.CNPJ ? String(emit.CNPJ).replace(/\D/g, '') : null,
-        nome: emit.xNome ? String(emit.xNome).trim() : null,
-      },
+      fornecedor: mapEmitente(emit),
       itens,
     };
   }

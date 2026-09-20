@@ -589,11 +589,28 @@ enum NotaFiscalStatus {
 
 // ─── Fornecedores de insumos ────────────────────────────────────────────────
 model Fornecedor {
-  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  nome      String   @db.VarChar(150)
-  cnpj      String?  @unique @db.VarChar(20)
-  telefone  String?  @db.VarChar(20)
-  email     String?  @db.VarChar(200)
+  id           String  @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  nome         String  @db.VarChar(150)
+  nomeFantasia String? @map("nome_fantasia") @db.VarChar(150)
+  cnpj         String? @unique @db.VarChar(20)
+  ie           String? @map("inscricao_estadual") @db.VarChar(20)
+  telefone     String? @db.VarChar(20)
+  email        String? @db.VarChar(200)
+
+  // Endereço — preenchido manualmente ou via importação do XML da NF-e (enderEmit).
+  logradouro  String? @db.VarChar(150)
+  numero      String? @db.VarChar(20)
+  complemento String? @db.VarChar(100)
+  bairro      String? @db.VarChar(100)
+  municipio   String? @db.VarChar(100)
+  uf          String? @db.VarChar(2)
+  cep         String? @db.VarChar(10)
+
+  // Representante comercial — contato humano, distinto do telefone/email da empresa.
+  representanteNome     String? @map("representante_nome") @db.VarChar(150)
+  representanteTelefone String? @map("representante_telefone") @db.VarChar(20)
+  representanteEmail    String? @map("representante_email") @db.VarChar(200)
+
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -604,11 +621,44 @@ model Fornecedor {
   @@map("fornecedores")
 }
 
+// ─── Categoria/Subcategoria de insumo (2 níveis) ────────────────────────────
+model InsumoCategoria {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  nome      String   @unique @db.VarChar(80)
+  sortOrder Int      @default(0) @map("sort_order")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  subcategorias InsumoSubcategoria[]
+  insumos       InsumoItem[]
+
+  @@map("insumo_categorias")
+}
+
+model InsumoSubcategoria {
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  categoriaId String   @map("categoria_id") @db.Uuid
+  nome        String   @db.VarChar(80)
+  sortOrder   Int      @default(0) @map("sort_order")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  categoria InsumoCategoria @relation(fields: [categoriaId], references: [id], onDelete: Cascade)
+  insumos   InsumoItem[]
+
+  @@index([categoriaId])
+  @@unique([categoriaId, nome])
+  @@map("insumo_subcategorias")
+}
+
 // ─── Insumo — item canônico de estoque (ex: "Arroz", "Filé de Salmão") ──────
 model InsumoItem {
   id            String      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   name          String      @db.VarChar(150)
+  // Campo legado de texto livre — mantido por compatibilidade, não usado por telas novas.
   categoria     String?     @db.VarChar(60)
+  categoriaId    String?     @map("categoria_id") @db.Uuid
+  subcategoriaId String?     @map("subcategoria_id") @db.Uuid
   unidadeBase   UnidadeBase @map("unidade_base")
   // Saldo sempre expresso na unidadeBase — nunca na unidade de compra de um fornecedor específico.
   estoqueAtual  Decimal     @default(0) @map("estoque_atual") @db.Decimal(14, 3)
@@ -617,10 +667,14 @@ model InsumoItem {
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
 
+  categoriaRel    InsumoCategoria?    @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  subcategoriaRel InsumoSubcategoria? @relation(fields: [subcategoriaId], references: [id], onDelete: SetNull)
   itensFornecedor InsumoFornecedorItem[]
   movimentacoes   MovimentacaoEstoque[]
 
   @@index([active])
+  @@index([categoriaId])
+  @@index([subcategoriaId])
   @@map("insumo_itens")
 }
 

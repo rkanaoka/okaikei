@@ -12,6 +12,8 @@ const INSUMO_INCLUDE = {
     include: FORNECEDOR_ITEM_INCLUDE,
     orderBy: { createdAt: 'asc' as const },
   },
+  categoriaRel: { select: { id: true, nome: true } },
+  subcategoriaRel: { select: { id: true, nome: true } },
 };
 
 @Injectable()
@@ -30,11 +32,17 @@ export class PrismaInsumoRepository implements InsumoRepositoryPort {
     return (this.prisma as any).insumoItem.findUnique({ where: { id }, include: INSUMO_INCLUDE });
   }
 
-  create(data: { id: string; name: string; categoria?: string | null; unidadeBase: string; estoqueMinimo?: number | null }) {
+  create(data: {
+    id: string; name: string; categoria?: string | null; categoriaId?: string | null; subcategoriaId?: string | null;
+    unidadeBase: string; estoqueMinimo?: number | null;
+  }) {
     return (this.prisma as any).insumoItem.create({ data, include: INSUMO_INCLUDE });
   }
 
-  update(id: string, data: Partial<{ name: string; categoria: string | null; estoqueMinimo: number | null; active: boolean }>) {
+  update(id: string, data: Partial<{
+    name: string; categoria: string | null; categoriaId: string | null; subcategoriaId: string | null;
+    estoqueMinimo: number | null; active: boolean;
+  }>) {
     return (this.prisma as any).insumoItem.update({ where: { id }, data, include: INSUMO_INCLUDE });
   }
 

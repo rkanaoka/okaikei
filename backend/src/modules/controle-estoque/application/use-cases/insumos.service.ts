@@ -29,7 +29,10 @@ export class InsumosService {
     return unidadesParaBase(unidadeBase);
   }
 
-  async create(dto: { name: string; categoria?: string; unidadeBase: UnidadeBase; estoqueMinimo?: number | null }) {
+  async create(dto: {
+    name: string; categoria?: string; categoriaId?: string | null; subcategoriaId?: string | null;
+    unidadeBase: UnidadeBase; estoqueMinimo?: number | null;
+  }) {
     if (!dto.name?.trim()) throw new BadRequestException('Nome do insumo é obrigatório.');
     if (!UNIDADES_BASE_VALIDAS.includes(dto.unidadeBase)) {
       throw new BadRequestException('Unidade-base inválida. Use MG (massa), ML (volume) ou UN (contagem).');
@@ -38,19 +41,26 @@ export class InsumosService {
       id: uuidv7(),
       name: dto.name.trim(),
       categoria: dto.categoria?.trim() || null,
+      categoriaId: dto.categoriaId || null,
+      subcategoriaId: dto.subcategoriaId || null,
       unidadeBase: dto.unidadeBase,
       estoqueMinimo: dto.estoqueMinimo ?? null,
     });
   }
 
-  async update(id: string, dto: Partial<{ name: string; categoria: string | null; estoqueMinimo: number | null; active: boolean }>) {
+  async update(id: string, dto: Partial<{
+    name: string; categoria: string | null; categoriaId: string | null; subcategoriaId: string | null;
+    estoqueMinimo: number | null; active: boolean;
+  }>) {
     await this.findOne(id);
     if (dto.name !== undefined && !dto.name.trim()) throw new BadRequestException('Nome do insumo é obrigatório.');
     return this.repo.update(id, {
-      ...(dto.name !== undefined          && { name: dto.name.trim() }),
-      ...(dto.categoria !== undefined     && { categoria: dto.categoria?.trim() || null }),
-      ...(dto.estoqueMinimo !== undefined && { estoqueMinimo: dto.estoqueMinimo }),
-      ...(dto.active !== undefined        && { active: dto.active }),
+      ...(dto.name !== undefined           && { name: dto.name.trim() }),
+      ...(dto.categoria !== undefined      && { categoria: dto.categoria?.trim() || null }),
+      ...(dto.categoriaId !== undefined    && { categoriaId: dto.categoriaId || null }),
+      ...(dto.subcategoriaId !== undefined && { subcategoriaId: dto.subcategoriaId || null }),
+      ...(dto.estoqueMinimo !== undefined  && { estoqueMinimo: dto.estoqueMinimo }),
+      ...(dto.active !== undefined         && { active: dto.active }),
     });
   }
 

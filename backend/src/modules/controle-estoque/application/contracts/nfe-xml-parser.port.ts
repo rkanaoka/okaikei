@@ -16,7 +16,20 @@ export interface NfeParseada {
   serie: string | null;
   dataEmissao: string | null; // ISO 8601, quando presente na nota
   valorTotal: number | null;
-  fornecedor: { cnpj: string | null; nome: string | null };
+  fornecedor: {
+    cnpj: string | null;
+    nome: string | null;
+    nomeFantasia: string | null;
+    ie: string | null;
+    telefone: string | null;
+    logradouro: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+    municipio: string | null;
+    uf: string | null;
+    cep: string | null;
+  };
   itens: NfeItemParseado[];
 }
 
