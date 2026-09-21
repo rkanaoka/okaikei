@@ -3,10 +3,11 @@ import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { SearchField } from '@/components/SearchField';
 import { BottomSheet } from '@/components/BottomSheet';
+import { NumericKeypad } from '@/components/NumericKeypad';
 import { useToast } from '@/components/ToastProvider';
 import { useBarcodeScanner } from '@/lib/barcodeScanner';
 import { api, Insumo } from '@/lib/apiClient';
-import { formatQuantidade, unidadeLabel } from '@/lib/format';
+import { formatQuantidade, unidadeLabel, paraQuantidadeBase } from '@/lib/format';
 
 interface ItemConferido {
   insumo: Insumo;
@@ -25,7 +26,6 @@ export default function ContagemPage() {
   const [salvando, setSalvando] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
-  const qtyRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!started) return;
@@ -39,7 +39,6 @@ export default function ContagemPage() {
   function selecionar(insumo: Insumo) {
     setSelected(insumo);
     setQuantidade('');
-    setTimeout(() => qtyRef.current?.focus(), 50);
   }
 
   const handleScan = useCallback(async (code: string) => {
@@ -60,7 +59,7 @@ export default function ContagemPage() {
 
   async function confirmar() {
     if (!selected) return;
-    const qtd = Number(quantidade.replace(',', '.'));
+    const qtd = paraQuantidadeBase(quantidade, selected.unidadeBase);
     if (Number.isNaN(qtd) || qtd < 0) {
       showToast('Informe uma quantidade válida.', 'error');
       return;
@@ -162,18 +161,10 @@ export default function ContagemPage() {
               Estoque atual: {formatQuantidade(selected.estoqueAtual, selected.unidadeBase)}{' '}
               {unidadeLabel(selected.unidadeBase)}
             </p>
-            <input
-              ref={qtyRef}
-              className="qty-input"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="any"
-              placeholder={`Quantidade contada (${unidadeLabel(selected.unidadeBase)})`}
-              value={quantidade}
-              onChange={(e) => setQuantidade(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && confirmar()}
-            />
+            <div className={`qty-display ${quantidade === '' ? 'placeholder' : ''}`}>
+              {quantidade || `Quantidade contada (${unidadeLabel(selected.unidadeBase)})`}
+            </div>
+            <NumericKeypad value={quantidade} onChange={setQuantidade} />
             <Button onClick={confirmar} disabled={salvando || quantidade === ''} fullWidth>
               {salvando ? 'Salvando…' : 'Confirmar'}
             </Button>
@@ -282,17 +273,23 @@ export default function ContagemPage() {
           flex-direction: column;
           gap: 14px;
         }
-        .qty-input {
+        .qty-display {
           min-height: var(--tap-min);
           border: 2px solid var(--color-border);
           border-radius: 14px;
           padding: 0 16px;
           font-size: 20px;
+          font-weight: 700;
           text-align: center;
-          outline: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--color-navy);
         }
-        .qty-input:focus {
-          border-color: var(--color-orange);
+        .qty-display.placeholder {
+          font-weight: 400;
+          font-size: 14px;
+          color: var(--color-text-muted);
         }
       `}</style>
     </Layout>

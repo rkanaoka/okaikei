@@ -3,7 +3,7 @@ import {
   INSUMO_REPOSITORY_PORT, InsumoRepositoryPort,
 } from '@/modules/controle-estoque/domain/repositories/insumo-repository.port';
 import {
-  UnidadeBase, UnidadeMedida, resolverFatorConversao, unidadesParaBase,
+  UnidadeBase, UnidadeMedida, resolverFatorConversao, unidadesParaBase, UNIDADES_BASE_LABEL,
 } from '@/modules/controle-estoque/domain/value-objects/unidade-conversao';
 import { gerarCodigoBarrasUnico } from '@/modules/controle-estoque/application/use-cases/insumo-codigo-barras.util';
 import { uuidv7 } from 'uuidv7';
@@ -86,6 +86,60 @@ export class InsumosService {
 
   remove(id: string) {
     return this.update(id, { active: false });
+  }
+
+  // ── Conversão de tipo de medida (unidadeBase) ────────────────────────────────
+
+  /** Troca a unidade-base do insumo (ex: Massa → Contagem), convertendo o saldo pela
+   *  equivalência informada. As SKUs (marcas/fornecedores) cadastradas ficam inválidas
+   *  na nova unidade e são desativadas automaticamente — precisam ser recadastradas. */
+  async converterTipoMedida(id: string, dto: { novaUnidadeBase: UnidadeBase; novoEstoqueAtual?: number }) {
+    const insumo = await this.findOne(id);
+    if (!UNIDADES_BASE_VALIDAS.includes(dto.novaUnidadeBase)) {
+      throw new BadRequestException('Unidade-base inválida. Use MG (massa), ML (volume) ou UN (contagem).');
+    }
+    if (dto.novaUnidadeBase === insumo.unidadeBase) {
+      throw new BadRequestException('O insumo já está nessa unidade de medida.');
+    }
+
+    const estoqueAtualAntigo = Number(insumo.estoqueAtual);
+    let novoEstoqueAtual = 0;
+    let novoEstoqueMinimo: number | null = null;
+
+    if (estoqueAtualAntigo > 0) {
+      const informado = Number(dto.novoEstoqueAtual);
+      if (!dto.novoEstoqueAtual || Number.isNaN(informado) || informado < 0) {
+        throw new BadRequestException(
+          `Informe a quantos "${UNIDADES_BASE_LABEL[dto.novaUnidadeBase]}" equivale o estoque atual.`,
+        );
+      }
+      novoEstoqueAtual = informado;
+      if (insumo.estoqueMinimo != null) {
+        const ratio = novoEstoqueAtual / estoqueAtualAntigo;
+        novoEstoqueMinimo = Number(insumo.estoqueMinimo) * ratio;
+      }
+    } else if (dto.novoEstoqueAtual) {
+      novoEstoqueAtual = Number(dto.novoEstoqueAtual);
+    }
+
+    for (const fi of insumo.itensFornecedor ?? []) {
+      await this.repo.updateFornecedorItem(fi.id, { active: false });
+    }
+
+    await this.repo.registrarMovimentacao({
+      id: uuidv7(),
+      insumoId: id,
+      tipo: 'AJUSTE',
+      origem: 'MANUAL',
+      quantidade: novoEstoqueAtual,
+      observacao: `Conversão de unidade: ${UNIDADES_BASE_LABEL[insumo.unidadeBase as UnidadeBase]} → ${UNIDADES_BASE_LABEL[dto.novaUnidadeBase]}`,
+    });
+
+    return this.repo.converterUnidadeBase(id, {
+      unidadeBase: dto.novaUnidadeBase,
+      estoqueAtual: novoEstoqueAtual,
+      estoqueMinimo: novoEstoqueMinimo,
+    });
   }
 
   // ── Itens de fornecedor (marca/embalagem de compra do insumo) ───────────────

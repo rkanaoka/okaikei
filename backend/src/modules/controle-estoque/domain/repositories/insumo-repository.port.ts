@@ -18,6 +18,9 @@ export interface InsumoRepositoryPort {
     name: string; categoria: string | null; categoriaId: string | null; subcategoriaId: string | null;
     estoqueMinimo: number | null; active: boolean;
   }>): Promise<any>;
+  /** Troca a unidade-base do insumo e reescreve estoqueAtual/estoqueMinimo já convertidos —
+   *  separado de `update()` pra não abrir esses campos como editáveis por ali. */
+  converterUnidadeBase(id: string, data: { unidadeBase: string; estoqueAtual: number; estoqueMinimo: number | null }): Promise<any>;
 
   // ── Itens de fornecedor (marca/embalagem de compra de um insumo) ────────────
   addFornecedorItem(data: {

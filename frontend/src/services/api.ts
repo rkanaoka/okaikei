@@ -347,6 +347,9 @@ export const insumosApi = {
     http.put(`/estoque/insumos/${id}`, d),
   remove: (id: string) => http.delete(`/estoque/insumos/${id}`),
 
+  converterUnidade: (id: string, d: { novaUnidadeBase: UnidadeBase; novoEstoqueAtual?: number }) =>
+    http.post(`/estoque/insumos/${id}/converter-unidade`, d),
+
   addFornecedorItem: (insumoId: string, d: {
     fornecedorId?: string | null; marca?: string; codigoFornecedor?: string;
     unidadeCompra: UnidadeMedida; fatorConversao?: number; ultimoPrecoUnitario?: number;

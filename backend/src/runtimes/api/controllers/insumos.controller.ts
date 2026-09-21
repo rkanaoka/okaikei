@@ -46,6 +46,11 @@ export class InsumosController {
     return this.insumos.remove(id);
   }
 
+  @Post(':id/converter-unidade')
+  converterUnidade(@Param('id') id: string, @Body() body: { novaUnidadeBase: 'MG' | 'ML' | 'UN'; novoEstoqueAtual?: number }) {
+    return this.insumos.converterTipoMedida(id, body);
+  }
+
   // ── Itens de fornecedor (marca/embalagem de compra) ──────────────────────────
 
   @Post(':id/fornecedores')

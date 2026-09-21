@@ -64,15 +64,18 @@ function ItensEstoqueTab() {
   const [novoForm, setNovoForm] = useState<{ name: string; categoriaId: string; subcategoriaId: string; unidadeBase: UnidadeBase; estoqueMinimo: string } | null>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [err, setErr] = useState('');
+  const [mostrarInativos, setMostrarInativos] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [i, f, u, c] = await Promise.all([insumosApi.list(), fornecedoresApi.list(), insumosApi.unidadesMedida(), categoriasInsumoApi.list()]);
+      const [i, f, u, c] = await Promise.all([
+        insumosApi.list(mostrarInativos), fornecedoresApi.list(), insumosApi.unidadesMedida(), categoriasInsumoApi.list(),
+      ]);
       setInsumos(i); setFornecedores(f); setUnidades(u); setCategorias(c);
     } catch { /* noop */ }
     finally { setLoading(false); }
-  }, []);
+  }, [mostrarInativos]);
   useEffect(() => { load(); }, [load]);
 
   async function salvarNovo() {
@@ -96,7 +99,11 @@ function ItensEstoqueTab() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#666', cursor: 'pointer' }}>
+          <input type="checkbox" checked={mostrarInativos} onChange={e => setMostrarInativos(e.target.checked)} />
+          Mostrar inativos
+        </label>
         <Btn onClick={() => setNovoForm({ name: '', categoriaId: '', subcategoriaId: '', unidadeBase: 'UN', estoqueMinimo: '' })}>+ Novo Insumo</Btn>
       </div>
 
@@ -240,6 +247,11 @@ function InsumoDetalheModal({ insumo, fornecedores, unidades, categorias, onClos
     catch (e: any) { setErr(e.message); }
   }
 
+  async function ativar() {
+    try { await insumosApi.update(insumo.id, { active: true }); await onChanged(); onClose(); }
+    catch (e: any) { setErr(e.message); }
+  }
+
   return (
     <ModalShell title={`Insumo — ${insumo.name}`} width={700} onClose={onClose}>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
@@ -267,13 +279,83 @@ function InsumoDetalheModal({ insumo, fornecedores, unidades, categorias, onClos
       </div>
       {err && <p style={{ color: BRAND.red, fontSize: 13, margin: '0 0 12px' }}>{err}</p>}
       <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', marginBottom: 24 }}>
-        <Btn variant="danger" small onClick={inativar}>Inativar insumo</Btn>
+        {insumo.active
+          ? <Btn variant="danger" small onClick={inativar}>Inativar insumo</Btn>
+          : <Btn variant="secondary" small onClick={ativar}>Ativar insumo</Btn>}
         <Btn small onClick={salvarBasic} disabled={savingBasic}>{savingBasic ? 'Salvando...' : 'Salvar alterações'}</Btn>
       </div>
 
+      <ConverterUnidadeSection insumo={insumo} onChanged={onChanged} />
       <FornecedorItensSection insumo={insumo} fornecedores={fornecedores} unidadesDaBase={unidadesDaBase} unidades={unidades} onChanged={onChanged} />
       <EntradaManualSection insumo={insumo} onChanged={onChanged} />
     </ModalShell>
+  );
+}
+
+// ── Seção: converter tipo de medida ───────────────────────────────────────────
+
+function ConverterUnidadeSection({ insumo, onChanged }: { insumo: InsumoRow; onChanged: () => Promise<void> | void }) {
+  const opcoes = (Object.keys(UNIDADE_BASE_LABEL) as UnidadeBase[]).filter(b => b !== insumo.unidadeBase);
+  const [aberto, setAberto] = useState(false);
+  const [novaUnidade, setNovaUnidade] = useState<UnidadeBase>(opcoes[0]);
+  const [novoEstoqueAtual, setNovoEstoqueAtual] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const estoqueAtualNum = parseFloat(insumo.estoqueAtual) || 0;
+
+  async function converter() {
+    setErr('');
+    if (estoqueAtualNum > 0 && !novoEstoqueAtual) {
+      setErr(`Informe a quantos ${UNIDADE_BASE_SHORT[novaUnidade]} equivale o estoque atual.`);
+      return;
+    }
+    setSaving(true);
+    try {
+      await insumosApi.converterUnidade(insumo.id, {
+        novaUnidadeBase: novaUnidade,
+        novoEstoqueAtual: novoEstoqueAtual ? parseFloat(novoEstoqueAtual) : undefined,
+      });
+      await onChanged();
+      setAberto(false);
+    } catch (e: any) { setErr(e.message); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: BRAND.navy }}>Converter Tipo de Medida</h3>
+        {!aberto && <Btn small variant="ghost" onClick={() => setAberto(true)}>Converter</Btn>}
+      </div>
+      {aberto && (
+        <div style={{ background: '#fff8f0', border: `1px solid ${BRAND.orange}`, borderRadius: 10, padding: 16 }}>
+          <p style={{ fontSize: 12, color: '#a15c00', margin: '0 0 12px', fontWeight: 600 }}>
+            ⚠ As marcas/fornecedores cadastradas para este insumo serão desativadas — elas foram
+            definidas para a unidade atual ({UNIDADE_BASE_SHORT[insumo.unidadeBase]}) e precisarão
+            ser recadastradas depois da conversão.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <Field label="Novo tipo de medida">
+              <select style={inputStyle} value={novaUnidade} onChange={e => setNovaUnidade(e.target.value as UnidadeBase)}>
+                {opcoes.map(b => <option key={b} value={b}>{UNIDADE_BASE_LABEL[b]}</option>)}
+              </select>
+            </Field>
+            {estoqueAtualNum > 0 && (
+              <Field label={`${formatEstoque(insumo.estoqueAtual, insumo.unidadeBase)} equivalem a quantos ${UNIDADE_BASE_SHORT[novaUnidade]}?`}>
+                <input style={inputStyle} type="number" step="0.001" value={novoEstoqueAtual}
+                  onChange={e => setNovoEstoqueAtual(e.target.value)} placeholder="Ex: 12" />
+              </Field>
+            )}
+          </div>
+          {err && <p style={{ color: BRAND.red, fontSize: 13, margin: '8px 0 0' }}>{err}</p>}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+            <Btn small variant="ghost" onClick={() => { setAberto(false); setErr(''); }}>Cancelar</Btn>
+            <Btn small onClick={converter} disabled={saving}>{saving ? 'Convertendo...' : 'Converter'}</Btn>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

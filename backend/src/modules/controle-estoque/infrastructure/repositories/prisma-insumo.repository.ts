@@ -80,6 +80,10 @@ export class PrismaInsumoRepository implements InsumoRepositoryPort {
     return (this.prisma as any).insumoItem.update({ where: { id }, data, include: INSUMO_INCLUDE });
   }
 
+  converterUnidadeBase(id: string, data: { unidadeBase: string; estoqueAtual: number; estoqueMinimo: number | null }) {
+    return (this.prisma as any).insumoItem.update({ where: { id }, data, include: INSUMO_INCLUDE });
+  }
+
   addFornecedorItem(data: {
     id: string; insumoId: string; fornecedorId?: string | null; marca?: string | null;
     codigoFornecedor?: string | null; unidadeCompra: string; fatorConversao: number;

@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { SearchField } from '@/components/SearchField';
 import { BottomSheet } from '@/components/BottomSheet';
+import { NumericKeypad } from '@/components/NumericKeypad';
 import { useToast } from '@/components/ToastProvider';
 import { useBarcodeScanner } from '@/lib/barcodeScanner';
 import { api, Insumo } from '@/lib/apiClient';
-import { formatQuantidade, unidadeLabel } from '@/lib/format';
+import { formatQuantidade, unidadeLabel, paraQuantidadeBase, unidadeTrabalhoFator } from '@/lib/format';
 
 type Modo = 'manual' | 'agil';
 
@@ -27,7 +28,10 @@ export default function RetiradaPage() {
   const [results, setResults] = useState<Insumo[]>([]);
   const [selected, setSelected] = useState<Insumo | null>(null);
   const [quantidade, setQuantidade] = useState('');
-  const qtyRef = useRef<HTMLInputElement>(null);
+
+  // ── Edição de item já adicionado à lista ─────────────────────────────────────
+  const [editando, setEditando] = useState<ItemRetirada | null>(null);
+  const [editQuantidade, setEditQuantidade] = useState('');
 
   useEffect(() => {
     if (modo !== 'manual') return;
@@ -45,7 +49,7 @@ export default function RetiradaPage() {
 
   function adicionarManual() {
     if (!selected) return;
-    const qtd = Number(quantidade.replace(',', '.'));
+    const qtd = paraQuantidadeBase(quantidade, selected.unidadeBase);
     if (Number.isNaN(qtd) || qtd <= 0) {
       showToast('Informe uma quantidade maior que zero.', 'error');
       return;
@@ -64,8 +68,9 @@ export default function RetiradaPage() {
         showToast(`Nenhum insumo com o código ${code}.`, 'error');
         return;
       }
-      acumular(found[0], 1);
-      showToast(`+1 ${found[0].name}`, 'info');
+      const incremento = unidadeTrabalhoFator(found[0].unidadeBase);
+      acumular(found[0], incremento);
+      showToast(`+${formatQuantidade(incremento, found[0].unidadeBase)} ${unidadeLabel(found[0].unidadeBase)} ${found[0].name}`, 'info');
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -90,6 +95,29 @@ export default function RetiradaPage() {
       delete next[insumoId];
       return next;
     });
+  }
+
+  function abrirEdicao(item: ItemRetirada) {
+    setEditando(item);
+    const emUnidadeTrabalho = item.quantidade / unidadeTrabalhoFator(item.insumo.unidadeBase);
+    setEditQuantidade(String(emUnidadeTrabalho).replace('.', ','));
+  }
+
+  function salvarEdicao() {
+    if (!editando) return;
+    const qtd = paraQuantidadeBase(editQuantidade, editando.insumo.unidadeBase);
+    if (Number.isNaN(qtd) || qtd <= 0) {
+      showToast('Informe uma quantidade maior que zero.', 'error');
+      return;
+    }
+    setItens((prev) => ({ ...prev, [editando.insumo.id]: { insumo: editando.insumo, quantidade: qtd } }));
+    setEditando(null);
+  }
+
+  function removerDaEdicao() {
+    if (!editando) return;
+    removerItem(editando.insumo.id);
+    setEditando(null);
   }
 
   function cancelarTudo() {
@@ -190,10 +218,7 @@ export default function RetiradaPage() {
               <button
                 key={insumo.id}
                 className="result-row"
-                onClick={() => {
-                  setSelected(insumo);
-                  setTimeout(() => qtyRef.current?.focus(), 50);
-                }}
+                onClick={() => setSelected(insumo)}
               >
                 <span>{insumo.name}</span>
                 <span className="muted">
@@ -215,17 +240,25 @@ export default function RetiradaPage() {
           <h2 className="heading">Itens a retirar ({listaItens.length})</h2>
           <div className="stack">
             {listaItens.map((i) => (
-              <div key={i.insumo.id} className="pend-row">
+              <button key={i.insumo.id} className="pend-row" onClick={() => abrirEdicao(i)}>
                 <span>{i.insumo.name}</span>
                 <span className="pend-right">
                   <strong>
                     {formatQuantidade(i.quantidade, i.insumo.unidadeBase)} {unidadeLabel(i.insumo.unidadeBase)}
                   </strong>
-                  <button className="remove" onClick={() => removerItem(i.insumo.id)} aria-label="Remover">
+                  <span
+                    className="remove"
+                    role="button"
+                    aria-label="Remover"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removerItem(i.insumo.id);
+                    }}
+                  >
                     ✕
-                  </button>
+                  </span>
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -245,20 +278,30 @@ export default function RetiradaPage() {
       <BottomSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.name}>
         {selected && (
           <div className="qty-form">
-            <input
-              ref={qtyRef}
-              className="qty-input"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="any"
-              placeholder={`Quantidade a retirar (${unidadeLabel(selected.unidadeBase)})`}
-              value={quantidade}
-              onChange={(e) => setQuantidade(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && adicionarManual()}
-            />
+            <div className={`qty-display ${quantidade === '' ? 'placeholder' : ''}`}>
+              {quantidade || `Quantidade a retirar (${unidadeLabel(selected.unidadeBase)})`}
+            </div>
+            <NumericKeypad value={quantidade} onChange={setQuantidade} />
             <Button onClick={adicionarManual} disabled={quantidade === ''} fullWidth>
               Adicionar à lista
+            </Button>
+          </div>
+        )}
+      </BottomSheet>
+
+      <BottomSheet open={!!editando} onClose={() => setEditando(null)} title={editando?.insumo.name}>
+        {editando && (
+          <div className="qty-form">
+            <p className="muted">Editar quantidade a retirar ({unidadeLabel(editando.insumo.unidadeBase)})</p>
+            <div className={`qty-display ${editQuantidade === '' ? 'placeholder' : ''}`}>
+              {editQuantidade || '0'}
+            </div>
+            <NumericKeypad value={editQuantidade} onChange={setEditQuantidade} />
+            <Button onClick={salvarEdicao} disabled={editQuantidade === ''} fullWidth>
+              Salvar
+            </Button>
+            <Button variant="danger" onClick={removerDaEdicao} fullWidth>
+              Remover da lista
             </Button>
           </div>
         )}
@@ -354,6 +397,9 @@ export default function RetiradaPage() {
           gap: 8px;
         }
         .pend-row {
+          appearance: none;
+          border: none;
+          width: 100%;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -361,6 +407,10 @@ export default function RetiradaPage() {
           border-radius: 12px;
           padding: 10px 14px;
           font-size: 14px;
+          font-family: inherit;
+          text-align: left;
+          color: var(--color-text);
+          cursor: pointer;
           box-shadow: var(--shadow-card);
         }
         .pend-right {
@@ -369,8 +419,9 @@ export default function RetiradaPage() {
           gap: 10px;
         }
         .remove {
-          appearance: none;
-          border: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           background: rgba(230, 57, 70, 0.1);
           color: var(--color-red);
           width: 28px;
@@ -390,17 +441,23 @@ export default function RetiradaPage() {
           flex-direction: column;
           gap: 14px;
         }
-        .qty-input {
+        .qty-display {
           min-height: var(--tap-min);
           border: 2px solid var(--color-border);
           border-radius: 14px;
           padding: 0 16px;
           font-size: 20px;
+          font-weight: 700;
           text-align: center;
-          outline: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--color-navy);
         }
-        .qty-input:focus {
-          border-color: var(--color-orange);
+        .qty-display.placeholder {
+          font-weight: 400;
+          font-size: 14px;
+          color: var(--color-text-muted);
         }
       `}</style>
     </Layout>
