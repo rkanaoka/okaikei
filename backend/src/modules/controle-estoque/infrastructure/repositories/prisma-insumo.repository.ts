@@ -36,6 +36,36 @@ export class PrismaInsumoRepository implements InsumoRepositoryPort {
     return (this.prisma as any).insumoItem.findUnique({ where: { codigoBarras } });
   }
 
+  search(q: string) {
+    return (this.prisma as any).insumoItem.findMany({
+      where: { active: true, name: { contains: q, mode: 'insensitive' } },
+      include: INSUMO_INCLUDE,
+      orderBy: { name: 'asc' },
+      take: 30,
+    });
+  }
+
+  async findAbaixoDoMinimo() {
+    // Prisma não compara duas colunas da mesma linha em `where` — filtra em memória
+    // (volume de insumos de um restaurante é pequeno, sem custo relevante).
+    const candidatos = await (this.prisma as any).insumoItem.findMany({
+      where: { active: true, estoqueMinimo: { not: null } },
+      include: INSUMO_INCLUDE,
+      orderBy: { name: 'asc' },
+    });
+    return candidatos.filter((i: any) => Number(i.estoqueAtual) < Number(i.estoqueMinimo));
+  }
+
+  findMovimentacoesRecentes(limit: number) {
+    return (this.prisma as any).movimentacaoEstoque.findMany({
+      include: {
+        insumo: { select: { id: true, name: true, unidadeBase: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
   create(data: {
     id: string; name: string; categoria?: string | null; categoriaId?: string | null; subcategoriaId?: string | null;
     codigoBarras: string; unidadeBase: string; estoqueMinimo?: number | null;

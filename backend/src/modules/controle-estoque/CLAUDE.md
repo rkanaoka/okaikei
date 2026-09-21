@@ -112,3 +112,16 @@ Focus NFe/PlugNotas/NFe.io). Fluxo em duas etapas:
 - `POST /estoque/fornecedores/nfe-emitente` — lê `{ xml }` e devolve os dados do emitente
   (nome, nome fantasia, CNPJ, IE, endereço, telefone) para pré-preencher o cadastro, sem gravar nada
 - `POST /estoque/insumos/nfe/preview` / `POST /estoque/insumos/nfe/confirmar` — importação de NF-e
+- `GET/POST/PUT/DELETE /estoque-mobile/*` — mesmos dados de insumos/estoque, mas para o
+  `estoque-app` (VPS, fora da LAN). Protegido por `ApiKeyGuard` (header `x-api-key` =
+  `LOCAL_API_KEY`, mesmo guard do cardápio digital), ao contrário do `/estoque/insumos`
+  interno (sem guard, uso do Admin na LAN). Ver `estoque-mobile.controller.ts`:
+  - `GET /estoque-mobile/insumos?q=|barcode=` — busca por nome ou código de barras (sem
+    params, lista todos os ativos)
+  - `GET /estoque-mobile/alertas` — insumos com `estoqueAtual < estoqueMinimo`
+  - `GET /estoque-mobile/movimentacoes?limit=` — histórico recente (kardex), mais
+    recentes primeiro
+  - `POST /estoque-mobile/contagem` — `{ insumo_id, quantidade }`, ajusta o saldo para o
+    valor contado e registra `MovimentacaoEstoque` (AJUSTE) só se houver diferença
+  - `POST /estoque-mobile/saida` — `{ itens: [{ insumo_id, quantidade }] }`, debita cada
+    item (`MovimentacaoEstoque` SAIDA)

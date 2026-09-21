@@ -1,4 +1,4 @@
-# Bodogami - Deploy do cardapio digital na VPS Hostinger
+# Bodogami - Deploy do cardapio digital + estoque-app na VPS Hostinger
 # Uso: make -f Makefile.vps <target>
 # Requer .env.vps configurado na raiz do projeto.
 
@@ -17,23 +17,23 @@ COMPOSE = docker compose -f docker-compose.hostinger.yml --env-file .env.vps
 
 help:
 	@echo ""
-	@echo "  Okaikei - Cardapio digital na VPS"
-	@echo "  make -f Makefile.vps deploy    Rebuilda o cardapio e a API e sobe a stack"
+	@echo "  Okaikei - Cardapio digital + Estoque na VPS"
+	@echo "  make -f Makefile.vps deploy    Rebuilda cardapio-app, estoque-app e a API e sobe a stack"
 	@echo "  make -f Makefile.vps up        Sobe a stack sem rebuild"
 	@echo "  make -f Makefile.vps down      Para a stack"
 	@echo "  make -f Makefile.vps restart   Reinicia a stack"
-	@echo "  make -f Makefile.vps logs      Segue os logs (s=cardapio-app, por exemplo)"
+	@echo "  make -f Makefile.vps logs      Segue os logs (s=cardapio-app|estoque-app|vps-api, por exemplo)"
 	@echo "  make -f Makefile.vps ps        Lista o estado dos containers"
-	@echo "  make -f Makefile.vps status    Lista containers e testa a API"
-	@echo "  make -f Makefile.vps build     Rebuilda cardapio-app e vps-api"
+	@echo "  make -f Makefile.vps status    Lista containers e testa a API e o estoque-app"
+	@echo "  make -f Makefile.vps build     Rebuilda cardapio-app, estoque-app e vps-api"
 	@echo "  make -f Makefile.vps prune     Remove imagens antigas"
 	@echo ""
 
 check-env:
 	@test -f .env.vps || (echo "Erro: .env.vps nao encontrado. Copie .env.vps.example e configure os valores." && exit 1)
 
-# O vps-api e o cardapio-app sao rebuildados juntos para manter a API e a SPA
-# sempre alinhadas no deploy.
+# O vps-api, o cardapio-app e o estoque-app sao rebuildados juntos para manter
+# a API e as duas SPAs sempre alinhadas no deploy.
 deploy: check-env build
 	$(COMPOSE) up -d --remove-orphans
 	@echo "Aguardando servicos subirem..."
@@ -63,9 +63,10 @@ status: check-env
 	$(COMPOSE) ps
 	@echo ""
 	@$(COMPOSE) exec -T vps-api wget -qO- http://127.0.0.1:4000/health >/dev/null 2>&1 && echo "API: OK" || echo "API: FALHOU (verifique os logs)"
+	@$(COMPOSE) exec -T estoque-app wget -qO- http://127.0.0.1:3000/login >/dev/null 2>&1 && echo "Estoque-app: OK" || echo "Estoque-app: FALHOU (verifique os logs)"
 
 build: check-env
-	$(COMPOSE) build --no-cache cardapio-app vps-api
+	$(COMPOSE) build --no-cache cardapio-app estoque-app vps-api
 
 prune:
 	docker image prune -f

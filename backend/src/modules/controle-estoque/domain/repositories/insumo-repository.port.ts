@@ -4,6 +4,12 @@ export interface InsumoRepositoryPort {
   findAll(includeInactive?: boolean): Promise<any[]>;
   findById(id: string): Promise<any | null>;
   findByCodigoBarras(codigoBarras: string): Promise<any | null>;
+  /** Busca por nome (case-insensitive, parcial). */
+  search(q: string): Promise<any[]>;
+  /** Insumos ativos com estoqueAtual < estoqueMinimo (estoqueMinimo definido). */
+  findAbaixoDoMinimo(): Promise<any[]>;
+  /** Últimas movimentações (entrada/saída/ajuste), mais recentes primeiro. */
+  findMovimentacoesRecentes(limit: number): Promise<any[]>;
   create(data: {
     id: string; name: string; categoria?: string | null; categoriaId?: string | null; subcategoriaId?: string | null;
     codigoBarras: string; unidadeBase: string; estoqueMinimo?: number | null;

@@ -1,6 +1,6 @@
-# ─── CI/CD — Cardápio Digital → VPS Hostinger ─────────────────────────────────
-# Dispara em push para `main` quando arquivos do cardápio forem alterados.
-# Faz SSH na VPS, puxa o repositório, rebuilda e sobe os containers.
+# ─── CI/CD — Cardápio Digital + Estoque App → VPS Hostinger ───────────────────
+# Dispara em push para `main` quando arquivos do cardápio, do estoque-app ou da
+# API forem alterados. Faz SSH na VPS, puxa o repositório, rebuilda e sobe os containers.
 #
 # Segredos necessários no GitHub (Settings → Secrets → Actions):
 #   VPS_HOST      → IP ou hostname da VPS (ex: srv1666726.hstgr.cloud)
@@ -9,7 +9,7 @@
 #   VPS_DEPLOY_PATH → caminho do repositório na VPS (ex: /opt/okaikei)
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: Deploy — Cardápio Digital VPS
+name: Deploy — Cardápio Digital + Estoque VPS
 
 on:
   push:
@@ -17,6 +17,7 @@ on:
       - main
     paths:
       - 'cardapio-app/**'
+      - 'estoque-app/**'
       - 'vps-api/**'
       - 'docker-compose.hostinger.yml'
       - '.github/workflows/deploy-vps.yml'
@@ -71,7 +72,7 @@ jobs:
             echo ">>> docker compose build..."
             docker compose -f docker-compose.hostinger.yml \
               --env-file .env.vps \
-              build --no-cache cardapio-app vps-api
+              build --no-cache cardapio-app estoque-app vps-api
 
             # Sobe os containers (recria apenas o que mudou)
             echo ">>> docker compose up -d..."
@@ -86,10 +87,12 @@ jobs:
             # Verifica status
             docker compose -f docker-compose.hostinger.yml ps
 
-            # Health check da API (dentro do container — não depende de porta publicada)
+            # Health check da API e do estoque-app (dentro dos containers — não depende de porta publicada)
             echo ">>> Health check..."
             docker exec okaikei_vps_api wget -qO- http://127.0.0.1:4000/health \
               && echo "API: OK" || echo "API: FALHOU (verifique os logs)"
+            docker exec okaikei_estoque_app wget -qO- http://127.0.0.1:3000/login \
+              && echo "Estoque-app: OK" || echo "Estoque-app: FALHOU (verifique os logs)"
 
             # Limpa imagens antigas
             docker image prune -f

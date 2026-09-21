@@ -127,3 +127,36 @@ services:
       - "traefik.http.routers.okaikei-app-http.middlewares=https-redirect@docker"
       - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+
+  # ── Estoque App (Next.js — gestão de estoque mobile/tablet) ──────────────────
+  # Domínio próprio (não compartilha host com o cardápio). Fala com o okaikei
+  # server via WireGuard usando as mesmas LOCAL_BACKEND_URL/LOCAL_API_KEY do vps-api.
+  estoque-app:
+    build:
+      context: ./estoque-app
+      dockerfile: Dockerfile
+    image: okaikei/estoque-app:latest
+    container_name: okaikei_estoque_app
+    restart: unless-stopped
+    environment:
+      ESTOQUE_PASSWORD: ${ESTOQUE_PASSWORD}
+      ESTOQUE_SESSION_SECRET: ${ESTOQUE_SESSION_SECRET}
+      OKAIKEI_BACKEND_URL: ${LOCAL_BACKEND_URL}
+      OKAIKEI_API_KEY: ${LOCAL_API_KEY}
+    networks:
+      - okaikei_internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.okaikei-estoque.rule=Host(`${ESTOQUE_DOMAIN:-estoque.bodogami.tech}`)"
+      - "traefik.http.routers.okaikei-estoque.entrypoints=websecure"
+      - "traefik.http.routers.okaikei-estoque.tls.certresolver=letsencrypt"
+      - "traefik.http.services.okaikei-estoque.loadbalancer.server.port=3000"
+      # Redirect HTTP → HTTPS
+      - "traefik.http.routers.okaikei-estoque-http.rule=Host(`${ESTOQUE_DOMAIN:-estoque.bodogami.tech}`)"
+      - "traefik.http.routers.okaikei-estoque-http.entrypoints=web"
+      - "traefik.http.routers.okaikei-estoque-http.middlewares=https-redirect@docker"

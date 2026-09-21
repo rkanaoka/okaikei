@@ -35,11 +35,12 @@ import { InsumosController }      from '@/runtimes/api/controllers/insumos.contr
 import { InsumoCategoriasController } from '@/runtimes/api/controllers/insumo-categorias.controller';
 import { FornecedoresController } from '@/runtimes/api/controllers/fornecedores.controller';
 import { NfeImportController }    from '@/runtimes/api/controllers/nfe-import.controller';
+import { EstoqueMobileController } from '@/runtimes/api/controllers/estoque-mobile.controller';
 
 @Module({
   controllers: [
     EtiquetasController, EtiquetasBarcodeController, InsumosController, InsumoCategoriasController,
-    FornecedoresController, NfeImportController,
+    FornecedoresController, NfeImportController, EstoqueMobileController,
   ],
   providers: [
     // Services

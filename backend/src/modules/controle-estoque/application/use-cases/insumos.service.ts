@@ -26,6 +26,23 @@ export class InsumosService {
     return item;
   }
 
+  async buscar(q?: string, barcode?: string) {
+    if (barcode?.trim()) {
+      const item = await this.repo.findByCodigoBarras(barcode.trim());
+      return item ? [item] : [];
+    }
+    if (q?.trim()) return this.repo.search(q.trim());
+    return this.repo.findAll(false);
+  }
+
+  alertas() {
+    return this.repo.findAbaixoDoMinimo();
+  }
+
+  movimentacoesRecentes(limit = 50) {
+    return this.repo.findMovimentacoesRecentes(limit);
+  }
+
   unidadesDisponiveis(unidadeBase: UnidadeBase) {
     return unidadesParaBase(unidadeBase);
   }
@@ -172,5 +189,56 @@ export class InsumosService {
     });
 
     return this.repo.ajustarEstoque(insumoId, quantidadeBase);
+  }
+
+  // ── Contagem de estoque (conferência física) ──────────────────────────────────
+
+  /** Ajusta o saldo do insumo para `quantidadeContada` (unidadeBase) e registra o ajuste. */
+  async registrarContagem(insumoId: string, quantidadeContada: number) {
+    const insumo = await this.findOne(insumoId);
+    const contada = Number(quantidadeContada);
+    if (contada < 0 || Number.isNaN(contada)) {
+      throw new BadRequestException('Informe uma quantidade contada válida (maior ou igual a zero).');
+    }
+
+    const delta = contada - Number(insumo.estoqueAtual);
+    if (delta !== 0) {
+      await this.repo.registrarMovimentacao({
+        id: uuidv7(),
+        insumoId,
+        tipo: 'AJUSTE',
+        origem: 'MANUAL',
+        quantidade: Math.abs(delta),
+        observacao: 'Contagem de estoque',
+      });
+    }
+
+    return this.repo.ajustarEstoque(insumoId, delta);
+  }
+
+  // ── Retirada de insumos (débito de estoque) ────────────────────────────────────
+
+  async registrarSaida(itens: Array<{ insumoId: string; quantidade: number }>) {
+    if (!itens?.length) throw new BadRequestException('Informe ao menos um item para dar saída.');
+
+    const resultados = [];
+    for (const item of itens) {
+      const insumo = await this.findOne(item.insumoId);
+      const quantidade = Number(item.quantidade);
+      if (!quantidade || quantidade <= 0) {
+        throw new BadRequestException(`Quantidade inválida para o insumo "${insumo.name}".`);
+      }
+
+      await this.repo.registrarMovimentacao({
+        id: uuidv7(),
+        insumoId: item.insumoId,
+        tipo: 'SAIDA',
+        origem: 'MANUAL',
+        quantidade,
+      });
+
+      resultados.push(await this.repo.ajustarEstoque(item.insumoId, -quantidade));
+    }
+    return resultados;
   }
 }
