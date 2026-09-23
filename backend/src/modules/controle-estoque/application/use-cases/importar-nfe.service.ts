@@ -54,7 +54,10 @@ export interface ItemConfirmacao {
   /** Vincula a um insumo já existente. */
   insumoId?: string;
   /** Ou cria um insumo novo para este item. */
-  criarInsumo?: { name: string; categoria?: string; unidadeBase: UnidadeBase; estoqueMinimo?: number | null };
+  criarInsumo?: {
+    name: string; categoria?: string; categoriaId?: string | null; subcategoriaId?: string | null;
+    unidadeBase: UnidadeBase; estoqueMinimo?: number | null;
+  };
   /** Reaproveita uma "SKU" de fornecedor já cadastrada (pula criação de uma nova). */
   fornecedorItemId?: string;
   /** Obrigatório quando não há fornecedorItemId — unidade em que este item foi comprado. */
@@ -149,6 +152,8 @@ export class ImportarNfeService {
           id: uuidv7(),
           name: item.criarInsumo.name.trim(),
           categoria: item.criarInsumo.categoria || null,
+          categoriaId: item.criarInsumo.categoriaId || null,
+          subcategoriaId: item.criarInsumo.subcategoriaId || null,
           codigoBarras,
           unidadeBase: item.criarInsumo.unidadeBase,
           estoqueMinimo: item.criarInsumo.estoqueMinimo ?? null,

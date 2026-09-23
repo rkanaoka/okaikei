@@ -4,6 +4,7 @@
  * impressora configurada em "Gerar Etiquetas de Validade".
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { jsPDF } from 'jspdf';
 import { insumosApi, etiquetasApi, etiquetasBarcodeApi, InsumoRow, EtiquetaBarcodeLayoutConfig } from '@/services/api';
 import { BRAND, Card, PageHeader, Btn, TableHead, ModalShell, inputStyle } from './shared';
 
@@ -21,6 +22,68 @@ function ean8Modulos(codigo: string): boolean[] {
   const digitos = (codigo || '00000000').replace(/\D/g, '').padStart(8, '0').slice(0, 8).split('').map(Number);
   const bits = ['101', ...digitos.slice(0, 4).map(d => L_CODE[d]), '01010', ...digitos.slice(4, 8).map(d => R_CODE[d]), '101'];
   return bits.join('').split('').map(b => b === '1');
+}
+
+// ── Exportação em PDF — folha A4, 2×5 = até 10 códigos de barras por página ───
+const PDF_COLS = 2;
+const PDF_ROWS = 5;
+const PDF_POR_PAGINA = PDF_COLS * PDF_ROWS;
+
+function gerarPdfCodigosBarras(itens: Array<{ name: string; codigoBarras: string }>): jsPDF {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageW = 210, pageH = 297;
+  const margin = 12;
+  const cellW = (pageW - margin * 2) / PDF_COLS;
+  const cellH = (pageH - margin * 2) / PDF_ROWS;
+
+  itens.forEach((item, idx) => {
+    const posNaPagina = idx % PDF_POR_PAGINA;
+    if (idx > 0 && posNaPagina === 0) doc.addPage();
+    const col = posNaPagina % PDF_COLS;
+    const row = Math.floor(posNaPagina / PDF_COLS);
+    const cellX = margin + col * cellW;
+    const cellY = margin + row * cellH;
+
+    // Guia de corte
+    doc.setDrawColor(200);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.rect(cellX + 3, cellY + 3, cellW - 6, cellH - 6);
+    doc.setLineDashPattern([], 0);
+
+    // Nome do insumo — até 2 linhas, tamanho grande para leitura fácil
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(20, 20, 20);
+    const todasLinhas: string[] = doc.splitTextToSize(item.name, cellW - 14);
+    const nomeLinhas = todasLinhas.slice(0, 2);
+    if (todasLinhas.length > 2) {
+      nomeLinhas[1] = nomeLinhas[1].slice(0, Math.max(0, nomeLinhas[1].length - 3)) + '...';
+    }
+    doc.text(nomeLinhas, cellX + cellW / 2, cellY + 11, { align: 'center' });
+
+    // Código de barras (EAN-8)
+    const codigo = (item.codigoBarras || '00000000').padStart(8, '0');
+    const barras = ean8Modulos(codigo);
+    const barcodeW = cellW - 30;
+    const moduleW = barcodeW / barras.length;
+    const barcodeH = 20;
+    const barcodeX = cellX + (cellW - barcodeW) / 2;
+    const barcodeY = cellY + 22;
+    doc.setFillColor(0, 0, 0);
+    let bx = barcodeX;
+    for (const preto of barras) {
+      if (preto) doc.rect(bx, barcodeY, moduleW, barcodeH, 'F');
+      bx += moduleW;
+    }
+
+    // Dígitos legíveis abaixo do código
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(codigo.split('').join(' '), cellX + cellW / 2, barcodeY + barcodeH + 7, { align: 'center' });
+  });
+
+  return doc;
 }
 
 // ── Prévia da etiqueta 60×30 mm — espelha buildZplBloco() do backend em dots ──
@@ -305,6 +368,19 @@ export default function GerarCodigoBarras() {
     finally { setPrinting(false); }
   }
 
+  function exportarPdf() {
+    setError(''); setSuccess('');
+    const idsMarcados = Object.keys(selecionados);
+    const base = idsMarcados.length > 0 ? insumos.filter(i => selecionados[i.id]) : insumosFiltrados;
+    const paraExportar = base.filter(i => i.codigoBarras);
+    if (paraExportar.length === 0) {
+      setError('Nenhum insumo com código de barras para exportar.');
+      return;
+    }
+    const doc = gerarPdfCodigosBarras(paraExportar.map(i => ({ name: i.name, codigoBarras: i.codigoBarras! })));
+    doc.save(`codigos-de-barras-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
   return (
     <div>
       <PageHeader
@@ -385,7 +461,10 @@ export default function GerarCodigoBarras() {
             </Card>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+            <Btn variant="ghost" onClick={exportarPdf}>
+              📄 Exportar PDF {Object.keys(selecionados).length > 0 ? `(${Object.keys(selecionados).length} selecionados)` : '(todos)'}
+            </Btn>
             <Btn onClick={() => setConfirm(true)} disabled={printing || itensSelecionados.length === 0}>
               {printing ? 'Imprimindo...' : `🖨️ Imprimir Selecionados (${totalEtiquetas})`}
             </Btn>

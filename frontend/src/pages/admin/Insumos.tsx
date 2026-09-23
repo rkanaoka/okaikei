@@ -66,6 +66,13 @@ function ItensEstoqueTab() {
   const [err, setErr] = useState('');
   const [mostrarInativos, setMostrarInativos] = useState(false);
 
+  const [busca, setBusca] = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [filtroSubcategoria, setFiltroSubcategoria] = useState('');
+  const [filtroTipoMedida, setFiltroTipoMedida] = useState<UnidadeBase | ''>('');
+  const [selecionados, setSelecionados] = useState<Record<string, true>>({});
+  const [bulkAberto, setBulkAberto] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -97,6 +104,35 @@ function ItensEstoqueTab() {
 
   const detalhe = insumos.find(i => i.id === detalheId) || null;
 
+  const subcategoriasDoFiltro = categorias.find(c => c.id === filtroCategoria)?.subcategorias.filter(s => s.active) ?? [];
+
+  const insumosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return insumos.filter(i =>
+      (!termo || i.name.toLowerCase().includes(termo)) &&
+      (!filtroCategoria || i.categoriaId === filtroCategoria) &&
+      (!filtroSubcategoria || i.subcategoriaId === filtroSubcategoria) &&
+      (!filtroTipoMedida || i.unidadeBase === filtroTipoMedida),
+    );
+  }, [insumos, busca, filtroCategoria, filtroSubcategoria, filtroTipoMedida]);
+
+  const idsSelecionados = Object.keys(selecionados);
+  const todosFiltradosSelecionados = insumosFiltrados.length > 0 && insumosFiltrados.every(i => selecionados[i.id]);
+
+  function toggleSelecionado(id: string, checked: boolean) {
+    setSelecionados(s => {
+      const next = { ...s };
+      if (checked) next[id] = true; else delete next[id];
+      return next;
+    });
+  }
+
+  function toggleSelecionarTodos(checked: boolean) {
+    setSelecionados(checked
+      ? Object.fromEntries(insumosFiltrados.map(i => [i.id, true as const]))
+      : {});
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -107,22 +143,70 @@ function ItensEstoqueTab() {
         <Btn onClick={() => setNovoForm({ name: '', categoriaId: '', subcategoriaId: '', unidadeBase: 'UN', estoqueMinimo: '' })}>+ Novo Insumo</Btn>
       </div>
 
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <input
+          style={{ ...inputStyle, flex: 1, minWidth: 200 }} placeholder="Buscar insumo pelo nome..."
+          value={busca} onChange={e => setBusca(e.target.value)}
+        />
+        <select style={{ ...inputStyle, width: 180 }} value={filtroCategoria}
+          onChange={e => { setFiltroCategoria(e.target.value); setFiltroSubcategoria(''); }}>
+          <option value="">Todas as categorias</option>
+          {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+        </select>
+        <select style={{ ...inputStyle, width: 180 }} value={filtroSubcategoria} disabled={!filtroCategoria}
+          onChange={e => setFiltroSubcategoria(e.target.value)}>
+          <option value="">Todas as subcategorias</option>
+          {subcategoriasDoFiltro.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+        </select>
+        <select style={{ ...inputStyle, width: 170 }} value={filtroTipoMedida}
+          onChange={e => setFiltroTipoMedida(e.target.value as UnidadeBase | '')}>
+          <option value="">Todos os tipos de medida</option>
+          {(Object.keys(UNIDADE_BASE_LABEL) as UnidadeBase[]).map(b => <option key={b} value={b}>{UNIDADE_BASE_LABEL[b]}</option>)}
+        </select>
+      </div>
+
+      {idsSelecionados.length > 0 && (
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12,
+          background: BRAND.navy, color: '#fff', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700,
+        }}>
+          <span>{idsSelecionados.length} insumo{idsSelecionados.length !== 1 ? 's' : ''} selecionado{idsSelecionados.length !== 1 ? 's' : ''}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn small variant="secondary" onClick={() => setBulkAberto(true)}>Alterar categoria/subcategoria</Btn>
+            <Btn small variant="ghost" onClick={() => setSelecionados({})}>Limpar seleção</Btn>
+          </div>
+        </div>
+      )}
+
       {loading ? <p style={{ color: '#aaa', fontSize: 13 }}>Carregando...</p> : (
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <TableHead cols={['Insumo', 'Categoria', 'Código de barras', 'Tipo de medida', 'Estoque atual', 'Estoque mínimo', 'Marcas/Fornecedores', '']} />
+            <thead>
+              <tr style={{ background: '#f8f9fa' }}>
+                <th style={{ padding: '10px 16px', width: 20 }}>
+                  <input type="checkbox" checked={todosFiltradosSelecionados} onChange={e => toggleSelecionarTodos(e.target.checked)} />
+                </th>
+                {['Insumo', 'Categoria', 'Subcategoria', 'Código de barras', 'Tipo de medida', 'Estoque atual', 'Estoque mínimo', 'Marcas/Fornecedores', ''].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
-              {insumos.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#ccc' }}>Nenhum insumo cadastrado</td></tr>
+              {insumosFiltrados.length === 0 && (
+                <tr><td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: '#ccc' }}>
+                  {insumos.length === 0 ? 'Nenhum insumo cadastrado' : 'Nenhum insumo encontrado para esse filtro'}
+                </td></tr>
               )}
-              {insumos.map(i => {
+              {insumosFiltrados.map(i => {
                 const abaixoDoMinimo = i.estoqueMinimo != null && parseFloat(i.estoqueAtual) < parseFloat(i.estoqueMinimo);
                 return (
                   <tr key={i.id} style={{ borderBottom: '1px solid #f5f5f5', opacity: i.active ? 1 : .5 }}>
-                    <td style={{ padding: '12px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name}</td>
-                    <td style={{ padding: '12px 16px', color: '#888' }}>
-                      {i.categoriaRel ? [i.categoriaRel.nome, i.subcategoriaRel?.nome].filter(Boolean).join(' / ') : (i.categoria || '—')}
+                    <td style={{ padding: '12px 16px' }}>
+                      <input type="checkbox" checked={!!selecionados[i.id]} onChange={e => toggleSelecionado(i.id, e.target.checked)} />
                     </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name}</td>
+                    <td style={{ padding: '12px 16px', color: '#888' }}>{i.categoriaRel?.nome ?? (i.categoria || '—')}</td>
+                    <td style={{ padding: '12px 16px', color: '#888' }}>{i.subcategoriaRel?.nome ?? '—'}</td>
                     <td style={{ padding: '12px 16px', color: '#888', fontFamily: 'monospace' }}>{i.codigoBarras || '—'}</td>
                     <td style={{ padding: '12px 16px', color: '#888' }}>{UNIDADE_BASE_LABEL[i.unidadeBase]}</td>
                     <td style={{ padding: '12px 16px', fontWeight: 700, color: abaixoDoMinimo ? BRAND.red : BRAND.navy }}>
@@ -140,6 +224,19 @@ function ItensEstoqueTab() {
             </tbody>
           </table>
         </Card>
+      )}
+
+      {bulkAberto && (
+        <BulkCategoriaModal
+          categorias={categorias} quantidade={idsSelecionados.length}
+          onClose={() => setBulkAberto(false)}
+          onAplicar={async (categoriaId, subcategoriaId) => {
+            await Promise.all(idsSelecionados.map(id => insumosApi.update(id, { categoriaId: categoriaId || null, subcategoriaId: subcategoriaId || null })));
+            setSelecionados({});
+            setBulkAberto(false);
+            await load();
+          }}
+        />
       )}
 
       {novoForm && (
@@ -180,6 +277,40 @@ function ItensEstoqueTab() {
         />
       )}
     </div>
+  );
+}
+
+// ── Alteração em massa de categoria/subcategoria ──────────────────────────────
+
+function BulkCategoriaModal({ categorias, quantidade, onClose, onAplicar }: {
+  categorias: InsumoCategoriaRow[]; quantidade: number; onClose: () => void;
+  onAplicar: (categoriaId: string, subcategoriaId: string) => Promise<void>;
+}) {
+  const [categoriaId, setCategoriaId] = useState('');
+  const [subcategoriaId, setSubcategoriaId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function aplicar() {
+    setSaving(true); setErr('');
+    try { await onAplicar(categoriaId, subcategoriaId); }
+    catch (e: any) { setErr(e.message); setSaving(false); }
+  }
+
+  return (
+    <ModalShell title="Alterar categoria/subcategoria em massa" onClose={onClose}>
+      <p style={{ margin: '0 0 14px', fontSize: 13, color: '#666' }}>
+        Isso vai alterar a categoria de <strong>{quantidade}</strong> insumo{quantidade !== 1 ? 's' : ''} selecionado{quantidade !== 1 ? 's' : ''}.
+        Deixe "Sem categoria" para remover a categoria desses insumos.
+      </p>
+      <CategoriaSubcategoriaFields categorias={categorias} categoriaId={categoriaId} subcategoriaId={subcategoriaId}
+        onChange={(c, s) => { setCategoriaId(c); setSubcategoriaId(s); }} />
+      {err && <p style={{ color: BRAND.red, fontSize: 13, margin: '0 0 12px' }}>{err}</p>}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <Btn variant="ghost" onClick={onClose} disabled={saving}>Cancelar</Btn>
+        <Btn onClick={aplicar} disabled={saving}>{saving ? 'Aplicando...' : `Aplicar a ${quantidade} insumo${quantidade !== 1 ? 's' : ''}`}</Btn>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -558,7 +689,8 @@ type RowState = {
   modo: 'vinculado' | 'existente' | 'novo';
   insumoId: string;
   novoNome: string;
-  novaCategoria: string;
+  novaCategoriaId: string;
+  novaSubcategoriaId: string;
   novaUnidadeBase: UnidadeBase;
   novoEstoqueMinimo: string;
   unidadeCompra: UnidadeMedida;
@@ -573,6 +705,7 @@ function ImportarNfeTab() {
   const [rows, setRows] = useState<RowState[]>([]);
   const [insumos, setInsumos] = useState<InsumoRow[]>([]);
   const [unidades, setUnidades] = useState<Record<UnidadeMedida, UnidadeInfo>>({} as any);
+  const [categorias, setCategorias] = useState<InsumoCategoriaRow[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [err, setErr] = useState('');
@@ -581,8 +714,8 @@ function ImportarNfeTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [i, u] = await Promise.all([insumosApi.list(), insumosApi.unidadesMedida()]);
-        setInsumos(i); setUnidades(u);
+        const [i, u, c] = await Promise.all([insumosApi.list(), insumosApi.unidadesMedida(), categoriasInsumoApi.list()]);
+        setInsumos(i); setUnidades(u); setCategorias(c);
       } catch { /* noop */ }
     })();
   }, []);
@@ -608,7 +741,8 @@ function ImportarNfeTab() {
         modo: it.vinculado ? 'vinculado' : 'existente',
         insumoId: it.insumoId || '',
         novoNome: it.descricao,
-        novaCategoria: '',
+        novaCategoriaId: '',
+        novaSubcategoriaId: '',
         novaUnidadeBase: it.unidadeBaseInsumo || 'UN',
         novoEstoqueMinimo: '',
         unidadeCompra: it.unidadeSugerida || 'UN',
@@ -666,7 +800,7 @@ function ImportarNfeTab() {
           codigoFornecedor: r.item.codigoFornecedor, descricao: r.item.descricao, unidadeComercial: r.item.unidadeComercial,
           quantidade: r.item.quantidade, valorUnitario: r.item.valorUnitario,
           criarInsumo: {
-            name: r.novoNome.trim(), categoria: r.novaCategoria.trim() || undefined,
+            name: r.novoNome.trim(), categoriaId: r.novaCategoriaId || undefined, subcategoriaId: r.novaSubcategoriaId || undefined,
             unidadeBase: r.novaUnidadeBase, estoqueMinimo: r.novoEstoqueMinimo ? parseFloat(r.novoEstoqueMinimo) : undefined,
           },
           unidadeCompra: r.unidadeCompra,
@@ -741,7 +875,7 @@ function ImportarNfeTab() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {rows.map((r, idx) => (
-              <ItemNfeRow key={idx} row={r} insumos={insumos} unidades={unidades} onChange={patch => updateRow(idx, patch)} />
+              <ItemNfeRow key={idx} row={r} insumos={insumos} unidades={unidades} categorias={categorias} onChange={patch => updateRow(idx, patch)} />
             ))}
           </div>
 
@@ -756,8 +890,8 @@ function ImportarNfeTab() {
   );
 }
 
-function ItemNfeRow({ row, insumos, unidades, onChange }: {
-  row: RowState; insumos: InsumoRow[]; unidades: Record<UnidadeMedida, UnidadeInfo>;
+function ItemNfeRow({ row, insumos, unidades, categorias, onChange }: {
+  row: RowState; insumos: InsumoRow[]; unidades: Record<UnidadeMedida, UnidadeInfo>; categorias: InsumoCategoriaRow[];
   onChange: (patch: Partial<RowState>) => void;
 }) {
   const insumoSelecionado = insumos.find(i => i.id === row.insumoId);
@@ -799,22 +933,25 @@ function ItemNfeRow({ row, insumos, unidades, onChange }: {
               </select>
             </Field>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
-              <Field label="Nome do novo insumo">
-                <input style={inputStyle} value={row.novoNome} onChange={e => onChange({ novoNome: e.target.value })} />
-              </Field>
-              <Field label="Categoria (opcional)">
-                <input style={inputStyle} value={row.novaCategoria} onChange={e => onChange({ novaCategoria: e.target.value })} />
-              </Field>
-              <Field label="Tipo de medida">
-                <select style={inputStyle} value={row.novaUnidadeBase}
-                  onChange={e => onChange({ novaUnidadeBase: e.target.value as UnidadeBase, unidadeCompra: 'UN' as UnidadeMedida, fatorConversao: '' })}>
-                  <option value="MG">Massa (kg/g/mg)</option>
-                  <option value="ML">Volume (L/ml)</option>
-                  <option value="UN">Contagem (un)</option>
-                </select>
-              </Field>
-            </div>
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
+                <Field label="Nome do novo insumo">
+                  <input style={inputStyle} value={row.novoNome} onChange={e => onChange({ novoNome: e.target.value })} />
+                </Field>
+                <Field label="Tipo de medida">
+                  <select style={inputStyle} value={row.novaUnidadeBase}
+                    onChange={e => onChange({ novaUnidadeBase: e.target.value as UnidadeBase, unidadeCompra: 'UN' as UnidadeMedida, fatorConversao: '' })}>
+                    <option value="MG">Massa (kg/g/mg)</option>
+                    <option value="ML">Volume (L/ml)</option>
+                    <option value="UN">Contagem (un)</option>
+                  </select>
+                </Field>
+              </div>
+              <CategoriaSubcategoriaFields
+                categorias={categorias} categoriaId={row.novaCategoriaId} subcategoriaId={row.novaSubcategoriaId}
+                onChange={(categoriaId, subcategoriaId) => onChange({ novaCategoriaId: categoriaId, novaSubcategoriaId: subcategoriaId })}
+              />
+            </>
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: exigeFator ? '1fr 1fr 1fr' : '1fr 1fr', gap: 10, marginTop: 10 }}>

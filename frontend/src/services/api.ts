@@ -386,7 +386,10 @@ export type NfeItemConfirmacao = {
   codigoFornecedor: string; descricao: string; unidadeComercial: string;
   quantidade: number; valorUnitario: number;
   insumoId?: string;
-  criarInsumo?: { name: string; categoria?: string; unidadeBase: UnidadeBase; estoqueMinimo?: number | null };
+  criarInsumo?: {
+    name: string; categoria?: string; categoriaId?: string | null; subcategoriaId?: string | null;
+    unidadeBase: UnidadeBase; estoqueMinimo?: number | null;
+  };
   fornecedorItemId?: string;
   unidadeCompra?: UnidadeMedida;
   fatorConversao?: number;
