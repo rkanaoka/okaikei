@@ -12,7 +12,7 @@ montado pelo shell `Admin.tsx` via roteamento interno (sidebar).
 | `Cardapio.tsx`           | CRUD de itens do cardápio                         |
 | `Categorias.tsx`         | Gestão de categorias                              |
 | `CardapioOpcoes.tsx`     | Grupos de opções (adicionais)                     |
-| `FormasPagamento.tsx`    | Listagem de métodos de pagamento                  |
+| `FormasPagamento.tsx`    | Cadastro/edição de formas de pagamento            |
 | `AcertoGarcons.tsx`      | Gorjetas compulsórias do dia                      |
 | `FrentesCaixa.tsx`       | Frentes de caixa abertas                          |
 | `ItensVendidos.tsx`      | Relatório de itens vendidos por período           |

@@ -1,4 +1,4 @@
-import { ComandaStatus, PaymentMethod } from '@prisma/client';
+import { ComandaStatus } from '@prisma/client';
 
 export const ORDERS_REPOSITORY_PORT = Symbol('OrdersRepositoryPort');
 

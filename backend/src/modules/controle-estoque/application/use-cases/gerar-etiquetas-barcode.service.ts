@@ -114,12 +114,15 @@ export class GerarEtiquetasBarcodeService {
     return lines.join('\n');
   }
 
-  /** Remove acentos e caracteres especiais não suportados por firmwares ZPL básicos. */
+  /** Remove acentos/caracteres especiais não suportados por firmwares ZPL básicos e
+   *  padroniza em caixa alta — etiqueta impressa sempre em maiúsculas, independente
+   *  de como o nome está cadastrado. */
   private normalize(text: string): string {
     return text
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')
       .replace(/[^\x20-\x7E]/g, '?')
-      .trim();
+      .trim()
+      .toUpperCase();
   }
 }

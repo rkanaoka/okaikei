@@ -215,6 +215,22 @@ export const garconsApi = {
   getByCode: (code: string) => http.get(`/garcons/by-code/${encodeURIComponent(code)}`) as unknown as Promise<{ id: string; code: string; name: string }>,
 };
 
+// ── Formas de Pagamento ─────────────────────────────────────────────────────────
+export type PaymentMethodRow = {
+  id: string; code: string; label: string; description: string | null;
+  color: string; active: boolean; sortOrder: number; usageCount?: number;
+};
+export type PaymentMethodInput = {
+  label?: string; description?: string | null; color?: string; active?: boolean; sortOrder?: number;
+};
+
+export const paymentMethodsApi = {
+  list:   (opts?: { active?: boolean }) =>
+    http.get('/payment-methods', { params: opts?.active !== undefined ? { active: opts.active } : undefined }) as unknown as Promise<PaymentMethodRow[]>,
+  create: (d: PaymentMethodInput) => http.post('/payment-methods', d) as unknown as Promise<PaymentMethodRow>,
+  update: (id: string, d: PaymentMethodInput) => http.put(`/payment-methods/${id}`, d) as unknown as Promise<PaymentMethodRow>,
+};
+
 // ── Modelos de Impressão ────────────────────────────────────────────────────────
 export const printTemplatesApi = {
   list:   () => http.get('/print-templates'),

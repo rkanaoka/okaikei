@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { comandasApi } from '@/services/api';
-import { BRAND, fmtBRL, fmtDate, PAY_LABELS, PAY_COLORS, todayStart, getSubtotal, getTotal, Card, PageHeader, Btn, TableHead } from './shared';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
+import { BRAND, fmtBRL, fmtDate, todayStart, getSubtotal, getTotal, Card, PageHeader, Btn, TableHead } from './shared';
 
 export default function Dashboard() {
+  const { labelOf, colorOf } = usePaymentMethods();
   const [loading, setLoading] = useState(true);
   const [all, setAll]         = useState<any[]>([]);
 
@@ -76,8 +78,8 @@ export default function Dashboard() {
                   <div key={method} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
                     padding:'10px 0', borderBottom:'1px solid #f5f5f5' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                      <div style={{ width:10, height:10, borderRadius:'50%', background:PAY_COLORS[method]??'#999' }} />
-                      <span style={{ fontWeight:700, fontSize:14, color:BRAND.navy }}>{PAY_LABELS[method]??method}</span>
+                      <div style={{ width:10, height:10, borderRadius:'50%', background:colorOf(method) }} />
+                      <span style={{ fontWeight:700, fontSize:14, color:BRAND.navy }}>{labelOf(method)}</span>
                     </div>
                     <span style={{ fontWeight:800, fontSize:15, color:BRAND.navy }}>{fmtBRL(amount)}</span>
                   </div>
@@ -134,9 +136,9 @@ export default function Dashboard() {
                     <td style={{ padding:'10px 16px' }}>
                       {(c.payments??[]).map((p:any) => (
                         <span key={p.id} style={{ fontSize:11, fontWeight:700,
-                          color:PAY_COLORS[p.method]??'#999', background:'#f5f5f5',
+                          color:colorOf(p.method), background:'#f5f5f5',
                           borderRadius:4, padding:'2px 6px', marginRight:4 }}>
-                          {PAY_LABELS[p.method]??p.method}
+                          {labelOf(p.method)}
                         </span>
                       ))}
                     </td>

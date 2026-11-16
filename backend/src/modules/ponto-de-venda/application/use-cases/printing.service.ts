@@ -5,6 +5,7 @@ import {
   TemplateType, DEFAULT_CONFIGS, DEFAULT_ENABLED, isTemplateType,
 } from '@/modules/ponto-de-venda/application/use-cases/print-template-defaults';
 import { PrintTemplatesService } from '@/modules/ponto-de-venda/application/use-cases/print-templates.service';
+import { PaymentMethodsService } from '@/modules/ponto-de-venda/application/use-cases/payment-methods.service';
 
 const ESC = 0x1b;
 const GS  = 0x1d;
@@ -26,6 +27,16 @@ function txt(s: string)          { return Buffer.from(s, 'latin1'); }
 function line(c = '-', n = 32)  { return txt(c.repeat(n) + '\n'); }
 function fmtBRL(v: number)       { return `R$ ${v.toFixed(2).replace('.', ',')}`.padStart(9); }
 
+const DEFAULT_METHOD_LABELS: Record<string, string> = { CASH: 'Dinheiro', CARD: 'Cartao', PIX: 'Pix', VOUCHER: 'Voucher' };
+
+/** Rótulo da forma de pagamento no cupom: maiúsculo e sem acento (impressora em latin1). */
+function receiptMethodLabel(p: { method: string; label?: string }): string {
+  return (p.label ?? DEFAULT_METHOD_LABELS[p.method] ?? p.method)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .slice(0, 22);
+}
+
 function serviceFeeBase(items: any[]): number {
   return (items ?? []).reduce((s: number, i: any) => {
     const eligible = i.menuItem?.chargeServiceFee !== false;
@@ -41,6 +52,7 @@ export class PrintingService {
     @Inject(PRINTER_REPOSITORY_PORT) private readonly printerRepo: PrinterRepositoryPort,
     @Inject(ESC_POS_CLIENT_PORT)     private readonly escPos:      EscPosClientPort,
     private readonly templates: PrintTemplatesService,
+    private readonly paymentMethods: PaymentMethodsService,
   ) {}
 
   private async getPrinter(category: string) {
@@ -84,12 +96,15 @@ export class PrintingService {
     );
   }
 
-  async printReceipt(comanda: any, payments: any[], total: number) {
+  async printReceipt(comanda: any, rawPayments: any[], total: number) {
     const printer = await this.getPrinter('cashier');
     if (!printer || !printer.enabled) {
       this.logger.warn('Impressora caixa não configurada');
       return;
     }
+
+    const labels   = await this.paymentMethods.labelMap();
+    const payments = rawPayments.map((p) => ({ ...p, label: labels[p.method] }));
 
     const receiptTemplate = await this.getTemplate('receipt');
     if (receiptTemplate.enabled) {
@@ -232,9 +247,8 @@ export class PrintingService {
       parts.push(txt(`${'Desconto'.padEnd(23)}-${fmtBRL(v).trim()}\n`));
     }
     parts.push(line('='), CMD.BOLD_ON, txt(`${'TOTAL'.padEnd(23)}${fmtBRL(total)}\n`), CMD.BOLD_OFF, line('-'));
-    const methodLabel: Record<string, string> = { CASH: 'DINHEIRO', CARD: 'CARTAO', PIX: 'PIX', VOUCHER: 'VOUCHER' };
     for (const p of payments) {
-      parts.push(txt(`${(methodLabel[p.method] ?? p.method).padEnd(23)}${fmtBRL(Number(p.amount))}\n`));
+      parts.push(txt(`${receiptMethodLabel(p).padEnd(23)}${fmtBRL(Number(p.amount))}\n`));
     }
     if (cfg.showAssinatura) {
       parts.push(line('-'), CMD.LF, txt('_'.repeat(28) + '\n'), CMD.ALIGN_CENTER, txt('Assinatura cliente\n'), CMD.ALIGN_LEFT);

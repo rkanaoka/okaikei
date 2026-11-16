@@ -249,7 +249,7 @@ enum OrderItemStatus {
 model Payment {
   id            String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   comandaId     String        @map("comanda_id") @db.Uuid
-  method        PaymentMethod
+  method        String        @db.VarChar(30) // código de PaymentMethodConfig (ex.: CASH, PIX)
   amount        Decimal       @db.Decimal(10, 2)
   notes         String?       @db.VarChar(200)
   paidAt        DateTime      @default(now()) @map("paid_at")
@@ -264,11 +264,21 @@ model Payment {
   @@map("payments")
 }
 
-enum PaymentMethod {
-  CASH
-  CARD
-  PIX
-  VOUCHER
+// Formas de pagamento cadastráveis. Payment.method guarda o `code` — o código é
+// imutável e as formas não são excluídas (só desativadas) para preservar o histórico.
+// CASH é especial: é a única que compõe o saldo físico da gaveta no fechamento do caixa.
+model PaymentMethodConfig {
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  code        String   @unique @db.VarChar(30)
+  label       String   @db.VarChar(60)
+  description String?  @db.VarChar(200)
+  color       String   @default("#999999") @db.VarChar(9)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("payment_methods")
 }
 
 // ─── Motivos de Cancelamento ──────────────────────────────────────────────────

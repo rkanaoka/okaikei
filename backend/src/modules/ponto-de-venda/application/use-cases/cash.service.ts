@@ -2,13 +2,13 @@ import { Inject, Injectable, NotFoundException, BadRequestException } from '@nes
 import { CASH_REPOSITORY_PORT, CashRepositoryPort } from '@/modules/ponto-de-venda/domain/repositories/cash-repository.port';
 import { uuidv7 } from 'uuidv7';
 import { CashMovementType } from '@prisma/client';
-
-const METHODS = ['CASH', 'CARD', 'PIX', 'VOUCHER'] as const;
+import { CASH_METHOD_CODE, PaymentMethodsService } from './payment-methods.service';
 
 @Injectable()
 export class CashService {
   constructor(
     @Inject(CASH_REPOSITORY_PORT) private readonly repo: CashRepositoryPort,
+    private readonly paymentMethods: PaymentMethodsService,
   ) {}
 
   async list(dto: { from?: string; to?: string }) {
@@ -62,9 +62,10 @@ export class CashService {
     const session = await this.repo.findSessionById(sessionId);
     if (!session) throw new NotFoundException('Caixa não encontrado');
 
-    const [payments, movements] = await Promise.all([
+    const [payments, movements, configuredCodes] = await Promise.all([
       this.repo.getSessionPayments(sessionId),
       this.repo.getSessionMovements(sessionId),
+      this.paymentMethods.orderedCodes(),
     ]);
 
     const salesByMethod: Record<string, number> = {};
@@ -74,11 +75,14 @@ export class CashService {
     const withdrawals    = movements.filter((m) => m.type === 'WITHDRAWAL').reduce((s, m) => s + Number(m.amount), 0);
     const reinforcements = movements.filter((m) => m.type === 'REINFORCEMENT').reduce((s, m) => s + Number(m.amount), 0);
 
-    const methods = METHODS
-      .filter((m) => m === 'CASH' || (salesByMethod[m] ?? 0) > 0)
+    // Dinheiro sempre aparece (gaveta física); as demais só se tiveram venda na sessão.
+    // Códigos sem cadastro (não deveria ocorrer) entram no fim para não sumir do resumo.
+    const codes = [...new Set([CASH_METHOD_CODE, ...configuredCodes, ...Object.keys(salesByMethod)])];
+    const methods = codes
+      .filter((m) => m === CASH_METHOD_CODE || (salesByMethod[m] ?? 0) > 0)
       .map((method) => {
         const sales = salesByMethod[method] ?? 0;
-        if (method === 'CASH') {
+        if (method === CASH_METHOD_CODE) {
           const opening  = Number(session.openingAmount);
           const esperado = opening + sales - withdrawals + reinforcements;
           return { method, sales, esperado, opening, withdrawals, reinforcements };

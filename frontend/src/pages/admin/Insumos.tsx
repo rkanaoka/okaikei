@@ -72,6 +72,7 @@ function ItensEstoqueTab() {
   const [filtroTipoMedida, setFiltroTipoMedida] = useState<UnidadeBase | ''>('');
   const [selecionados, setSelecionados] = useState<Record<string, true>>({});
   const [bulkAberto, setBulkAberto] = useState(false);
+  const [mostrarSugestoesNome, setMostrarSugestoesNome] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,6 +116,12 @@ function ItensEstoqueTab() {
       (!filtroTipoMedida || i.unidadeBase === filtroTipoMedida),
     );
   }, [insumos, busca, filtroCategoria, filtroSubcategoria, filtroTipoMedida]);
+
+  const sugestoesNomeInsumo = useMemo(() => {
+    const termo = (novoForm?.name || '').trim().toLowerCase();
+    if (termo.length < 2) return [];
+    return insumos.filter(i => i.name.toLowerCase().includes(termo)).slice(0, 6);
+  }, [insumos, novoForm?.name]);
 
   const idsSelecionados = Object.keys(selecionados);
   const todosFiltradosSelecionados = insumosFiltrados.length > 0 && insumosFiltrados.every(i => selecionados[i.id]);
@@ -204,7 +211,7 @@ function ItensEstoqueTab() {
                     <td style={{ padding: '12px 16px' }}>
                       <input type="checkbox" checked={!!selecionados[i.id]} onChange={e => toggleSelecionado(i.id, e.target.checked)} />
                     </td>
-                    <td style={{ padding: '12px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name}</td>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name.toUpperCase()}</td>
                     <td style={{ padding: '12px 16px', color: '#888' }}>{i.categoriaRel?.nome ?? (i.categoria || '—')}</td>
                     <td style={{ padding: '12px 16px', color: '#888' }}>{i.subcategoriaRel?.nome ?? '—'}</td>
                     <td style={{ padding: '12px 16px', color: '#888', fontFamily: 'monospace' }}>{i.codigoBarras || '—'}</td>
@@ -242,8 +249,39 @@ function ItensEstoqueTab() {
       {novoForm && (
         <ModalShell title="Novo Insumo" onClose={() => { setNovoForm(null); setErr(''); }}>
           <Field label="Nome do insumo">
-            <input style={inputStyle} value={novoForm.name} onChange={e => setNovoForm({ ...novoForm, name: e.target.value })}
-              placeholder="Ex: Arroz, Filé de Salmão, Molho Shoyu" />
+            <div style={{ position: 'relative' }}>
+              <input
+                style={{ ...inputStyle, textTransform: 'uppercase' }} value={novoForm.name} autoComplete="off"
+                onChange={e => { setNovoForm({ ...novoForm, name: e.target.value.toUpperCase() }); setMostrarSugestoesNome(true); }}
+                onFocus={() => setMostrarSugestoesNome(true)}
+                onBlur={() => setTimeout(() => setMostrarSugestoesNome(false), 150)}
+                placeholder="Ex: Arroz, Filé de Salmão, Molho Shoyu"
+              />
+              {mostrarSugestoesNome && sugestoesNomeInsumo.length > 0 && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff',
+                  border: '1.5px solid #dde', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.12)', zIndex: 10,
+                  maxHeight: 220, overflowY: 'auto',
+                }}>
+                  <div style={{ padding: '6px 12px', fontSize: 11, color: '#999', borderBottom: '1px solid #f0f0f0' }}>
+                    Já existem insumos com nome parecido — selecione para abrir:
+                  </div>
+                  {sugestoesNomeInsumo.map(i => (
+                    <button
+                      key={i.id} type="button" onMouseDown={e => e.preventDefault()}
+                      onClick={() => { setNovoForm(null); setErr(''); setDetalheId(i.id); }}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', textAlign: 'left',
+                        padding: '9px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
+                      }}
+                    >
+                      <span style={{ fontWeight: 600, color: BRAND.navy }}>{i.name.toUpperCase()}</span>
+                      <span style={{ color: '#999', fontSize: 11 }}>{i.active ? 'já cadastrado' : 'inativo'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </Field>
           <CategoriaSubcategoriaFields
             categorias={categorias} categoriaId={novoForm.categoriaId} subcategoriaId={novoForm.subcategoriaId}
@@ -347,7 +385,7 @@ function InsumoDetalheModal({ insumo, fornecedores, unidades, categorias, onClos
   categorias: InsumoCategoriaRow[]; onClose: () => void; onChanged: () => Promise<void> | void;
 }) {
   const [basic, setBasic] = useState({
-    name: insumo.name, categoriaId: insumo.categoriaId || '', subcategoriaId: insumo.subcategoriaId || '',
+    name: insumo.name.toUpperCase(), categoriaId: insumo.categoriaId || '', subcategoriaId: insumo.subcategoriaId || '',
     estoqueMinimo: insumo.estoqueMinimo != null ? String(insumo.estoqueMinimo) : '',
   });
   const [savingBasic, setSavingBasic] = useState(false);
@@ -384,9 +422,12 @@ function InsumoDetalheModal({ insumo, fornecedores, unidades, categorias, onClos
   }
 
   return (
-    <ModalShell title={`Insumo — ${insumo.name}`} width={700} onClose={onClose}>
+    <ModalShell title={`Insumo — ${insumo.name.toUpperCase()}`} width={700} onClose={onClose}>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-        <Field label="Nome"><input style={inputStyle} value={basic.name} onChange={e => setBasic({ ...basic, name: e.target.value })} /></Field>
+        <Field label="Nome">
+          <input style={{ ...inputStyle, textTransform: 'uppercase' }} value={basic.name}
+            onChange={e => setBasic({ ...basic, name: e.target.value.toUpperCase() })} />
+        </Field>
         <Field label="Código de barras (EAN-8)">
           <div style={{ ...inputStyle, background: '#f8f9fa', fontFamily: 'monospace', fontWeight: 700, color: BRAND.navy }}>
             {insumo.codigoBarras || '—'}
@@ -740,7 +781,7 @@ function ImportarNfeTab() {
         item: it,
         modo: it.vinculado ? 'vinculado' : 'existente',
         insumoId: it.insumoId || '',
-        novoNome: it.descricao,
+        novoNome: it.descricao.toUpperCase(),
         novaCategoriaId: '',
         novaSubcategoriaId: '',
         novaUnidadeBase: it.unidadeBaseInsumo || 'UN',
@@ -929,14 +970,15 @@ function ItemNfeRow({ row, insumos, unidades, categorias, onChange }: {
             <Field label="Insumo">
               <select style={inputStyle} value={row.insumoId} onChange={e => onChange({ insumoId: e.target.value })}>
                 <option value="">Selecione...</option>
-                {insumos.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                {insumos.map(i => <option key={i.id} value={i.id}>{i.name.toUpperCase()}</option>)}
               </select>
             </Field>
           ) : (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
                 <Field label="Nome do novo insumo">
-                  <input style={inputStyle} value={row.novoNome} onChange={e => onChange({ novoNome: e.target.value })} />
+                  <input style={{ ...inputStyle, textTransform: 'uppercase' }} value={row.novoNome}
+                    onChange={e => onChange({ novoNome: e.target.value.toUpperCase() })} />
                 </Field>
                 <Field label="Tipo de medida">
                   <select style={inputStyle} value={row.novaUnidadeBase}

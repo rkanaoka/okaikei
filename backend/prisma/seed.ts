@@ -161,6 +161,19 @@ async function main() {
   }
   console.log(`  ✓ Motivos de cancelamento: ${cancellationLabels.length} (${cancelToInsert.length} inseridos)`);
 
+  // ── Formas de pagamento (mesmas da migration payment_methods_cadastraveis) ──
+  // update vazio: não sobrescreve rótulo/cor/status já editados pelo admin
+  const paymentMethods = [
+    { code: 'CASH',    label: 'Dinheiro',                description: 'Aceite pagamentos em espécie', color: '#2DC653', sortOrder: 1 },
+    { code: 'CARD',    label: 'Cartão (débito/crédito)', description: 'Via maquininha',               color: '#5c6bc0', sortOrder: 2 },
+    { code: 'PIX',     label: 'Pix',                     description: 'Transferência instantânea',    color: '#00bfa5', sortOrder: 3 },
+    { code: 'VOUCHER', label: 'Voucher',                 description: 'Vale-refeição e alimentação',  color: '#FF6B2B', sortOrder: 4 },
+  ];
+  for (const pm of paymentMethods) {
+    await prisma.paymentMethodConfig.upsert({ where: { code: pm.code }, update: {}, create: pm });
+  }
+  console.log(`  ✓ Formas de pagamento: ${paymentMethods.length}`);
+
   console.log('\n✅  Seed complete!');
   console.log('   Admin: admin@bodogami.com.br / admin123');
   console.log('   Garçom: garcom@bodogami.com.br / garcom123');

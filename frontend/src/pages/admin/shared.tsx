@@ -10,12 +10,6 @@ export const fmtBRL  = (v: any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.'
 export const fmtDate = (d: string) =>
   new Date(d).toLocaleString('pt-BR', { timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
 
-export const PAY_LABELS: Record<string,string> = {
-  CASH:'Dinheiro', CARD:'Cartão', PIX:'Pix', VOUCHER:'Voucher',
-};
-export const PAY_COLORS: Record<string,string> = {
-  CASH: BRAND.green, CARD:'#5c6bc0', PIX:'#00bfa5', VOUCHER: BRAND.orange,
-};
 export const PRINT_CAT_LABELS: Record<string,string> = {
   kitchen:'Cozinha', bar:'Bar', cashier:'Caixa',
 };

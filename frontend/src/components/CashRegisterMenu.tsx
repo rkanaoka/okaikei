@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, Fragment, type CSSProperties } from 'react';
 import { cashApi } from '@/services/api';
 import CurrencyInput from '@/components/CurrencyInput';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653' };
 const fmtBRL = (v:any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
-const METHOD_LABEL: Record<string,string> = { CASH:'Dinheiro', CARD:'Cartão', PIX:'Pix', VOUCHER:'Voucher' };
 
 function fmtElapsed(min: number) {
   if (min < 60) return `${min}min`;
@@ -59,6 +59,7 @@ function MethodBreakdown({ m }: { m:any }) {
 }
 
 function SummaryTable({ methods }: { methods:any[] }) {
+  const { labelOf } = usePaymentMethods();
   const total = methods.reduce((s:number,m:any) => s + m.esperado, 0);
   return (
     <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
@@ -72,7 +73,7 @@ function SummaryTable({ methods }: { methods:any[] }) {
         {methods.map((m:any) => (
           <Fragment key={m.method}>
             <tr style={{ borderTop:'1px solid #eee' }}>
-              <td style={{ padding:'8px 4px', fontWeight:700, color:BRAND.navy }}>{METHOD_LABEL[m.method] ?? m.method}</td>
+              <td style={{ padding:'8px 4px', fontWeight:700, color:BRAND.navy }}>{labelOf(m.method)}</td>
               <td style={{ padding:'8px 4px', textAlign:'right', fontWeight:700 }}>{fmtBRL(m.esperado)}</td>
             </tr>
             {m.method === 'CASH' && (
@@ -92,6 +93,7 @@ function SummaryTable({ methods }: { methods:any[] }) {
 }
 
 function CloseTable({ methods, counts, onChange }: { methods:any[]; counts:Record<string,string>; onChange:(method:string, value:string)=>void }) {
+  const { labelOf } = usePaymentMethods();
   const totalEsperado = methods.reduce((s:number,m:any) => s + m.esperado, 0);
   const totalEmCaixa  = methods.reduce((s:number,m:any) => s + (parseFloat(counts[m.method]) || 0), 0);
   return (
@@ -112,7 +114,7 @@ function CloseTable({ methods, counts, onChange }: { methods:any[]; counts:Recor
             return (
               <Fragment key={m.method}>
                 <tr style={{ borderTop:'1px solid #eee' }}>
-                  <td style={{ padding:'8px 4px', fontWeight:700, color:BRAND.navy }}>{METHOD_LABEL[m.method] ?? m.method}</td>
+                  <td style={{ padding:'8px 4px', fontWeight:700, color:BRAND.navy }}>{labelOf(m.method)}</td>
                   <td style={{ padding:'8px 4px', textAlign:'right' }}>{fmtBRL(m.esperado)}</td>
                   <td style={{ padding:'8px 4px', textAlign:'right' }}>
                     <CurrencyInput value={counts[m.method] ?? '0'}

@@ -14,6 +14,7 @@ import { PRINTER_REPOSITORY_PORT }        from './domain/repositories/printer-re
 import { PRINT_TEMPLATE_REPOSITORY_PORT } from './domain/repositories/print-template-repository.port';
 import { REASONS_REPOSITORY_PORT }        from './domain/repositories/reasons-repository.port';
 import { GARCOM_REPOSITORY_PORT }         from './domain/repositories/garcom-repository.port';
+import { PAYMENT_METHOD_REPOSITORY_PORT } from './domain/repositories/payment-method-repository.port';
 
 // Application — Contracts (tokens)
 import { COMANDA_EVENT_PUBLISHER_PORT }   from './application/contracts/comanda-event-publisher.port';
@@ -31,6 +32,7 @@ import { PrintingService }       from './application/use-cases/printing.service'
 import { PrintTemplatesService } from './application/use-cases/print-templates.service';
 import { ReasonsService }        from './application/use-cases/reasons.service';
 import { GarconsService }        from './application/use-cases/garcons.service';
+import { PaymentMethodsService } from './application/use-cases/payment-methods.service';
 
 // Infrastructure — Repository Adapters
 import { PrismaMenuRepository }          from './infrastructure/repositories/prisma-menu.repository';
@@ -44,6 +46,7 @@ import { PrismaPrinterRepository }       from './infrastructure/repositories/pri
 import { PrismaPrintTemplateRepository } from './infrastructure/repositories/prisma-print-template.repository';
 import { PrismaReasonsRepository }       from './infrastructure/repositories/prisma-reasons.repository';
 import { PrismaGarcomRepository }        from './infrastructure/repositories/prisma-garcom.repository';
+import { PrismaPaymentMethodRepository } from './infrastructure/repositories/prisma-payment-method.repository';
 
 // Infrastructure — Publishers & API Clients
 import { NatsComandaPublisher } from './infrastructure/publishers/nats-comanda.publisher';
@@ -61,6 +64,7 @@ import { PrintingController }      from '@/runtimes/api/controllers/printing.con
 import { PrintTemplatesController } from '@/runtimes/api/controllers/print-templates.controller';
 import { ReasonsController }       from '@/runtimes/api/controllers/reasons.controller';
 import { GarconsController }       from '@/runtimes/api/controllers/garcons.controller';
+import { PaymentMethodsController } from '@/runtimes/api/controllers/payment-methods.controller';
 
 @Module({
   imports: [SyncModule, AuthModule],
@@ -76,6 +80,7 @@ import { GarconsController }       from '@/runtimes/api/controllers/garcons.cont
     PrintTemplatesController,
     ReasonsController,
     GarconsController,
+    PaymentMethodsController,
   ],
   providers: [
     // Services
@@ -90,6 +95,7 @@ import { GarconsController }       from '@/runtimes/api/controllers/garcons.cont
     PrintTemplatesService,
     ReasonsService,
     GarconsService,
+    PaymentMethodsService,
 
     // Repository Port → Adapter bindings
     { provide: MENU_REPOSITORY_PORT,           useClass: PrismaMenuRepository },
@@ -103,6 +109,7 @@ import { GarconsController }       from '@/runtimes/api/controllers/garcons.cont
     { provide: PRINT_TEMPLATE_REPOSITORY_PORT, useClass: PrismaPrintTemplateRepository },
     { provide: REASONS_REPOSITORY_PORT,        useClass: PrismaReasonsRepository },
     { provide: GARCOM_REPOSITORY_PORT,         useClass: PrismaGarcomRepository },
+    { provide: PAYMENT_METHOD_REPOSITORY_PORT, useClass: PrismaPaymentMethodRepository },
 
     // Publisher and API Client Port → Adapter bindings
     { provide: COMANDA_EVENT_PUBLISHER_PORT,   useClass: NatsComandaPublisher },
@@ -120,6 +127,7 @@ import { GarconsController }       from '@/runtimes/api/controllers/garcons.cont
     PrintTemplatesService,
     ReasonsService,
     GarconsService,
+    PaymentMethodsService,
   ],
 })
 export class PontoDeVendaModule {}

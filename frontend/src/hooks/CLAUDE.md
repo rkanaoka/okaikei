@@ -7,6 +7,7 @@ React hooks customizados. Encapsulam estado e efeitos colaterais reutilizáveis.
 | Hook            | Descrição                                                  |
 |-----------------|------------------------------------------------------------|
 | `useSocket.ts`  | Conecta ao WebSocket, inscreve em eventos, limpa no unmount|
+| `usePaymentMethods.ts` | Formas de pagamento cadastradas (rótulo/cor por código, cache compartilhado) |
 
 ## useSocket — assinatura
 ```typescript

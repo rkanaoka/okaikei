@@ -16,6 +16,7 @@ cardápio, mesas, comandas, caixa, pagamentos, vouchers, impressão e motivos.
 | Impressão            | PrintingService         | PrinterRepositoryPort + EscPosClientPort |
 | Modelos de impressão | PrintTemplatesService   | PrintTemplateRepositoryPort       |
 | Motivos              | ReasonsService          | ReasonsRepositoryPort             |
+| Formas de pagamento  | PaymentMethodsService   | PaymentMethodRepositoryPort       |
 
 ## Dependências externas
 - SyncModule (`@/modules/sync/`) — enfileiramento de eventos de sync

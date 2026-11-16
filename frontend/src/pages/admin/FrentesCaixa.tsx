@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cashApi } from '@/services/api';
-import { BRAND, fmtBRL, fmtDate, PAY_LABELS, Card, PageHeader, Btn, TableHead } from './shared';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
+import { BRAND, fmtBRL, fmtDate, Card, PageHeader, Btn, TableHead } from './shared';
 
 export default function FrentesCaixa() {
+  const { labelOf } = usePaymentMethods();
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [from, setFrom]         = useState('');
@@ -171,7 +173,7 @@ export default function FrentesCaixa() {
                       const mDiv = Math.abs(m.diff) > 0.01;
                       return (
                         <tr key={m.method} style={{ borderTop:'1px solid #f5f5f5' }}>
-                          <td style={{ padding:'10px 16px', fontWeight:700, color:BRAND.navy }}>{PAY_LABELS[m.method] ?? m.method}</td>
+                          <td style={{ padding:'10px 16px', fontWeight:700, color:BRAND.navy }}>{labelOf(m.method)}</td>
                           <td style={{ padding:'10px 16px' }}>{fmtBRL(m.esperado)}</td>
                           <td style={{ padding:'10px 16px' }}>{fmtBRL(m.emCaixa)}</td>
                           <td style={{ padding:'10px 16px', fontWeight:700, color: mDiv ? (m.diff < 0 ? BRAND.red : BRAND.green) : '#999' }}>

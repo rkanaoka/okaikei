@@ -2,7 +2,7 @@ import {
   Controller, Get, Post, Put, Delete, Param, Body, Query, HttpCode,
 } from '@nestjs/common';
 import { OrdersService } from '@/modules/ponto-de-venda/application/use-cases/orders.service';
-import { ComandaStatus, PaymentMethod } from '@prisma/client';
+import { ComandaStatus } from '@prisma/client';
 
 @Controller('comandas')
 export class OrdersController {
@@ -89,7 +89,7 @@ export class OrdersController {
       partnershipId?:  string;
       closedByGarcomId?: string;
       discountReasonId?: string;
-      payments: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
+      payments: Array<{ method: string; amount: number; notes?: string }>;
       printReceipt?: boolean;
     },
   ) {

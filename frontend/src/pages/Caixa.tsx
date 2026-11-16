@@ -2,14 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { comandasApi, reasonsApi, menuApi, tablesApi, vouchersApi, garconsApi, partnershipsApi } from '@/services/api';
 import CurrencyInput from '@/components/CurrencyInput';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653', navyLight:'#1A2E44', cream:'#FFF8F0' };
 const fmtBRL = (v:any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
 
-type PayMethod = 'CASH'|'CARD'|'PIX'|'VOUCHER';
-type Payment   = { method: PayMethod; amount: string };
+type Payment   = { method: string; amount: string };
 
-const PAY_LABELS: Record<PayMethod,string> = { CASH:'💵 Dinheiro', CARD:'💳 Cartão', PIX:'🟢 Pix', VOUCHER:'🎟️ Voucher' };
+// Ícones das formas padrão; formas cadastradas depois aparecem sem ícone.
+const PAY_ICONS: Record<string,string> = { CASH:'💵', CARD:'💳', PIX:'🟢', VOUCHER:'🎟️' };
 const CAT_LABEL: Record<string,string> = { kitchen:'🍱 Cozinha', bar:'🍺 Bar', cashier:'💰 Caixa' };
 
 function PillBtn({ children, onClick, variant='primary', disabled=false, small=false }:any) {
@@ -136,6 +137,10 @@ export default function Caixa() {
   // Gorjeta compulsória de 10% aplicada por padrão; caixa pode remover ou editar (% ou R$)
   const [surcharge, setSurcharge] = useState<{ type: 'percent'|'fixed'|''; value: string }>({ type:'percent', value:'10' });
   const [payments,  setPayments]  = useState<Payment[]>([{ method:'CASH', amount:'' }]);
+  const { activeMethods, labelOf } = usePaymentMethods();
+  const payLabel = (code: string) => `${PAY_ICONS[code] ? `${PAY_ICONS[code]} ` : ''}${labelOf(code)}`;
+  // Enquanto a lista carrega, oferece ao menos Dinheiro (forma padrão das linhas de pagamento)
+  const payOptions = activeMethods.length ? activeMethods.map(m => m.code) : ['CASH'];
 
   // Garçom responsável pelo fechamento (ID de 3 dígitos)
   const [garcomCode, setGarcomCode]               = useState('');
@@ -933,7 +938,7 @@ export default function Caixa() {
               <div style={{ fontSize:12, fontWeight:700, color:'#888', marginBottom:8, textTransform:'uppercase', letterSpacing:.5 }}>Pagamentos</div>
               {comanda.payments.map((p:any,i:number) => (
                 <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:14, marginBottom:4 }}>
-                  <span style={{ color:'#555' }}>{PAY_LABELS[p.method as PayMethod] ?? p.method}</span>
+                  <span style={{ color:'#555' }}>{payLabel(p.method)}</span>
                   <span style={{ fontWeight:700, color:BRAND.navy }}>{fmtBRL(p.amount)}</span>
                 </div>
               ))}
@@ -1004,7 +1009,8 @@ export default function Caixa() {
               <div key={idx} style={{ display:'flex', gap:10, alignItems:'center', marginBottom:12 }}>
                 <select value={p.method} onChange={e=>updatePayment(idx,'method',e.target.value)}
                   style={{ flex:1, border:`2px solid ${BRAND.navy}`, borderRadius:10, padding:'10px 12px', fontWeight:700, fontSize:14, background:'#fff', outline:'none', cursor:'pointer' }}>
-                  {(Object.keys(PAY_LABELS) as PayMethod[]).map(m => <option key={m} value={m}>{PAY_LABELS[m]}</option>)}
+                  {payOptions.map(m => <option key={m} value={m}>{payLabel(m)}</option>)}
+                  {!payOptions.includes(p.method) && <option value={p.method}>{payLabel(p.method)} (desativada)</option>}
                 </select>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
                   <CurrencyInput value={p.amount}

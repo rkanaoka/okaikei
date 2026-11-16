@@ -16,6 +16,7 @@ valida entrada (DTOs), delega para use-cases e retorna resposta.
 | `printing.controller.ts`      | printing             | `/api/print`         |
 | `print-templates.controller.ts` | print-templates    | `/api/print-templates` |
 | `reasons.controller.ts`       | reasons              | `/api/reasons`       |
+| `payment-methods.controller.ts` | payment-methods    | `/api/payment-methods` |
 | `sync.controller.ts`          | sync                 | `/api/sync`          |
 
 ## Regras obrigatórias

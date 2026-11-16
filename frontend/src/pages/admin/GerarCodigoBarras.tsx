@@ -54,7 +54,7 @@ function gerarPdfCodigosBarras(itens: Array<{ name: string; codigoBarras: string
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(20, 20, 20);
-    const todasLinhas: string[] = doc.splitTextToSize(item.name, cellW - 14);
+    const todasLinhas: string[] = doc.splitTextToSize(item.name.toUpperCase(), cellW - 14);
     const nomeLinhas = todasLinhas.slice(0, 2);
     if (todasLinhas.length > 2) {
       nomeLinhas[1] = nomeLinhas[1].slice(0, Math.max(0, nomeLinhas[1].length - 3)) + '...';
@@ -126,7 +126,7 @@ function EtiquetaBarcodePreview({ nome, codigoBarras, layout }: { nome: string; 
         style={{ border: '1px solid #ccc', borderRadius: 4, background: '#fff', display: 'block' }}>
         <rect x={2 + L.offsetX} y={2 + L.offsetY} width="476" height="236" fill="none" stroke="#000" strokeWidth="2" />
         <text x={x0} y={baseline(nomeY, L.fontSizeNome)} fontSize={L.fontSizeNome} fontWeight="bold" fontFamily="monospace" fill="#000">
-          {abbr(nome || 'NOME DO INSUMO', 26)}
+          {abbr((nome || 'NOME DO INSUMO').toUpperCase(), 26)}
         </text>
         {bars}
         {L.showCode && (
@@ -442,7 +442,7 @@ export default function GerarCodigoBarras() {
                           <input type="checkbox" checked={marcado} disabled={!i.codigoBarras}
                             onChange={e => toggle(i.id, e.target.checked)} />
                         </td>
-                        <td style={{ padding: '10px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name}</td>
+                        <td style={{ padding: '10px 16px', fontWeight: 700, color: BRAND.navy }}>{i.name.toUpperCase()}</td>
                         <td style={{ padding: '10px 16px', color: '#888', fontFamily: 'monospace' }}>
                           {i.codigoBarras || 'sem código'}
                         </td>

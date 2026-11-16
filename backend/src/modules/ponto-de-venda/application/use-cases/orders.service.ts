@@ -5,7 +5,8 @@ import { WEBSOCKET_PUBLISHER_PORT, WebSocketPublisherPort }          from '@/sha
 import { RedisService }  from '@/shared/infrastructure/cache/redis.service';
 import { SyncService }   from '@/modules/sync/application/use-cases/sync.service';
 import { PrintingService } from '@/modules/ponto-de-venda/application/use-cases/printing.service';
-import { ComandaStatus, PaymentMethod } from '@prisma/client';
+import { ComandaStatus } from '@prisma/client';
+import { PaymentMethodsService } from './payment-methods.service';
 import { uuidv7 } from 'uuidv7';
 
 @Injectable()
@@ -19,6 +20,7 @@ export class OrdersService {
     private readonly redis:    RedisService,
     private readonly sync:     SyncService,
     private readonly printing: PrintingService,
+    private readonly paymentMethods: PaymentMethodsService,
   ) {}
 
   // ── Comandas ──────────────────────────────────────────────────────────────
@@ -244,7 +246,7 @@ export class OrdersService {
     partnershipId?:  string;
     closedByGarcomId?: string;
     discountReasonId?: string;
-    payments: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
+    payments: Array<{ method: string; amount: number; notes?: string }>;
     printReceipt?: boolean;
   }) {
     const comanda = await this.repo.findById(comandaId);
@@ -296,6 +298,8 @@ export class OrdersService {
     if (voucherDiscount > 0) total -= voucherDiscount;
     if (partnershipDiscount > 0) total -= partnershipDiscount;
     total = Math.max(0, total);
+
+    await this.paymentMethods.assertUsable(dto.payments.map((p) => p.method));
 
     const paid = dto.payments.reduce((s, p) => s + p.amount, 0);
     if (Math.abs(paid - total) > 0.01) {

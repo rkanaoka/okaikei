@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { comandasApi } from '@/services/api';
+import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import {
   BRAND, fmtBRL, fmtDate, getSubtotal, getTotal, getSurcharge, getDiscount,
-  Card, PageHeader, TableHead, PAY_LABELS, PAY_COLORS,
+  Card, PageHeader, TableHead,
   toSPDateStr, inDateRange, DateRangeFilter, getShiftLabel,
 } from './shared';
 
 export default function Pedidos() {
+  const { labelOf, colorOf } = usePaymentMethods();
   const [loading, setLoading]     = useState(true);
   const [comandas, setComandas]   = useState<any[]>([]);
   const [expandedId, setExpanded] = useState<string | null>(null);
@@ -89,9 +91,9 @@ export default function Pedidos() {
                           {(c.payments ?? []).map((p:any, i:number) => (
                             <span key={i} style={{
                               fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:999,
-                              background:`${PAY_COLORS[p.method] ?? '#999'}18`, color: PAY_COLORS[p.method] ?? '#666',
+                              background:`${colorOf(p.method)}18`, color: colorOf(p.method),
                             }}>
-                              {PAY_LABELS[p.method] ?? p.method} {fmtBRL(p.amount)}
+                              {labelOf(p.method)} {fmtBRL(p.amount)}
                             </span>
                           ))}
                           {!(c.payments?.length) && <span style={{ color:'#ccc' }}>—</span>}
