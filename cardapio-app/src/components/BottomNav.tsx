@@ -2,7 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../lib/CartContext';
 import { APP_MAX_WIDTH, C, FONT, RADIUS, SHADOW } from '../theme';
-import { IconCart, IconHome, IconReceipt } from './Icons';
+import { IconCart, IconHeart, IconHome, IconReceipt } from './Icons';
 
 /** Altura útil da barra (sem a área segura do iPhone) — usada pelas páginas para o espaçamento inferior. */
 export const BOTTOM_NAV_HEIGHT = 68;
@@ -71,7 +71,7 @@ function Tab({ label, active, onClick, icon, badge = 0 }: TabProps) {
   );
 }
 
-export default function BottomNav({ hasSession }: { hasSession: boolean }) {
+export default function BottomNav({ hasSession, showFavorites }: { hasSession: boolean; showFavorites: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const cart = useCart();
@@ -103,6 +103,14 @@ export default function BottomNav({ hasSession }: { hasSession: boolean }) {
         onClick={() => navigate('/')}
         icon={(color, active) => <IconHome size={22} color={color} filled={active} />}
       />
+      {showFavorites && (
+        <Tab
+          label="Favoritos"
+          active={location.pathname === '/favoritos' && !cart.isOpen}
+          onClick={() => navigate('/favoritos')}
+          icon={(color, active) => <IconHeart size={22} color={color} filled={active} />}
+        />
+      )}
       <Tab
         label="Carrinho"
         active={cart.isOpen}

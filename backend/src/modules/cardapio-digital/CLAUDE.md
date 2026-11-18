@@ -21,6 +21,16 @@ Implementado via `ApiKeyGuard` (NestJS Guard).
 | GET    | `/cardapio/comanda/:token`     | Status da comanda pelo UUID (token = ID)       |
 | POST   | `/cardapio/comanda/:token/items` | Adiciona itens a uma comanda existente        |
 
+## Vitrine do app (Admin > Cardápio > Cardápio digital)
+`CardapioDigitalSettingsService` guarda boas-vindas, ofertas, destaques ("mais pedidos"),
+avaliações e favoritos numa única chave de `SystemConfig` (`cardapio_digital`) — sem migration.
+- Admin: `GET/PUT /cardapio-digital/settings` (JWT + permissão `cardapio`) — `CardapioDigitalAdminController`.
+- App: vai junto de `GET /cardapio/menu` no campo `settings` (só blocos ligados; `null` quando desligado),
+  então chega ao cardapio-app pelo mesmo cache da VPS — mudanças aparecem em até `CACHE_TTL_SECONDS`.
+- Sem nada salvo, devolve **dados de exemplo** (`isSample: true`); ofertas e avaliações de exemplo
+  começam desligadas para não exibir descontos/notas inventados a clientes reais.
+- "Mais pedidos" automático = soma de `comanda_items.quantity` (sem cancelados) no período configurado.
+
 ## Como a VPS se conecta
 - Conexão via WireGuard VPN (túnel privado entre VPS e restaurante)
 - Base URL: `http://<ip-wireguard-restaurante>:<porta>/cardapio`
@@ -37,10 +47,12 @@ Implementado via `ApiKeyGuard` (NestJS Guard).
 modules/cardapio-digital/
   guards/api-key.guard.ts                    # Guard de autenticação por API key
   application/use-cases/
-    cardapio-digital.service.ts              # Toda a lógica do módulo
+    cardapio-digital.service.ts              # Cardápio, pedidos e comandas (endpoints da VPS)
+    cardapio-digital-settings.service.ts     # Vitrine do app (boas-vindas, ofertas, destaques...)
   cardapio-digital.module.ts                 # Módulo NestJS
   CLAUDE.md                                  # Este arquivo
 
 runtimes/api/controllers/
-  cardapio-publico.controller.ts             # Controller dos 4 endpoints
+  cardapio-publico.controller.ts             # Controller dos 4 endpoints da VPS
+  cardapio-digital-admin.controller.ts       # GET/PUT /cardapio-digital/settings (admin)
 ```

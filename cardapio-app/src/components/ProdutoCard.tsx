@@ -3,17 +3,21 @@ import type { MenuItem } from '../lib/types';
 import { C, FONT, RADIUS, SHADOW, formatPrice } from '../theme';
 import FoodImage from './FoodImage';
 import { IconPlus } from './Icons';
+import { FavoriteButton, Rating } from './Showcase';
 
 interface Props {
   item: MenuItem;
   categoryName?: string;
   /** Quantidade já no carrinho — mostrada como selo no botão de adicionar. */
   inCart?: number;
+  rating?: { rating: number; reviews: number } | null;
+  /** undefined = favoritos desligados no admin (não mostra o coração). */
+  favorite?: { active: boolean; onToggle: () => void };
   onAdd: (item: MenuItem) => void;
   onOpenDetail: (item: MenuItem) => void;
 }
 
-export default function ProdutoCard({ item, categoryName, inCart = 0, onAdd, onOpenDetail }: Props) {
+export default function ProdutoCard({ item, categoryName, inCart = 0, rating, favorite, onAdd, onOpenDetail }: Props) {
   const hasOptions = (item.optionGroups?.length ?? 0) > 0;
 
   function handleQuickAdd(e: React.MouseEvent) {
@@ -28,6 +32,7 @@ export default function ProdutoCard({ item, categoryName, inCart = 0, onAdd, onO
     <article
       onClick={() => onOpenDetail(item)}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onOpenDetail(item);
@@ -49,61 +54,67 @@ export default function ProdutoCard({ item, categoryName, inCart = 0, onAdd, onO
         minWidth: 0,
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0 12px', opacity: item.available ? 1 : 0.45 }}>
+      {favorite && (
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 1 }}>
+          <FavoriteButton active={favorite.active} onToggle={favorite.onToggle} label={item.name} />
+        </div>
+      )}
+
+      <div style={{ position: 'relative', alignSelf: 'center', margin: '6px 0 12px', opacity: item.available ? 1 : 0.45 }}>
         <FoodImage src={item.imageUrl} alt={item.name} hint={[categoryName, item.description]} size={112} />
+        <button
+          type="button"
+          onClick={handleQuickAdd}
+          disabled={!item.available}
+          aria-label={hasOptions ? `Escolher opções de ${item.name}` : `Adicionar ${item.name} ao carrinho`}
+          style={{
+            position: 'absolute',
+            right: -6,
+            bottom: -2,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            border: '3px solid #fff',
+            background: item.available ? C.primary : '#D9D9D9',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: item.available ? 'pointer' : 'not-allowed',
+            boxShadow: item.available ? SHADOW.button : 'none',
+          }}
+        >
+          <IconPlus size={18} strokeWidth={2.6} />
+          {inCart > 0 && (
+            <span
+              aria-label={`${inCart} no carrinho`}
+              style={{
+                position: 'absolute',
+                top: -8,
+                right: -8,
+                minWidth: 18,
+                height: 18,
+                padding: '0 4px',
+                borderRadius: 9,
+                background: C.text,
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '2px solid #fff',
+              }}
+            >
+              {inCart > 9 ? '9+' : inCart}
+            </span>
+          )}
+        </button>
       </div>
 
-      <button
-        type="button"
-        onClick={handleQuickAdd}
-        disabled={!item.available}
-        aria-label={hasOptions ? `Escolher opções de ${item.name}` : `Adicionar ${item.name} ao carrinho`}
-        style={{
-          position: 'absolute',
-          top: 10,
-          right: 10,
-          width: 34,
-          height: 34,
-          borderRadius: '50%',
-          border: 'none',
-          background: item.available ? C.primary : '#D9D9D9',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: item.available ? 'pointer' : 'not-allowed',
-          boxShadow: item.available ? SHADOW.button : 'none',
-        }}
-      >
-        <IconPlus size={18} strokeWidth={2.6} />
-        {inCart > 0 && (
-          <span
-            aria-label={`${inCart} no carrinho`}
-            style={{
-              position: 'absolute',
-              top: -5,
-              right: -5,
-              minWidth: 18,
-              height: 18,
-              padding: '0 4px',
-              borderRadius: 9,
-              background: C.text,
-              color: '#fff',
-              fontSize: 10,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px solid #fff',
-            }}
-          >
-            {inCart > 9 ? '9+' : inCart}
-          </span>
-        )}
-      </button>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
-        <span style={{ fontSize: 15, fontWeight: 600, color: C.primary }}>{formatPrice(item.price)}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: rating?.reviews ? 'space-between' : 'flex-end', gap: 6, marginBottom: 2 }}>
+        <Rating value={rating} />
+        <span style={{ fontSize: 15, fontWeight: 600, color: C.primary, whiteSpace: 'nowrap' }}>{formatPrice(item.price)}</span>
       </div>
       <h4
         style={{

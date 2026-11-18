@@ -88,3 +88,18 @@ export const IconRefresh = (p: IconProps) => (
     <path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4" />
   </Svg>
 );
+
+export const IconHeart = ({ filled, ...p }: IconProps) => (
+  <Svg {...p}>
+    <path
+      d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"
+      fill={filled ? (p.color ?? 'currentColor') : 'none'}
+    />
+  </Svg>
+);
+
+export const IconStar = ({ size = 14, color = '#FFB800' }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path fill={color} d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" />
+  </svg>
+);

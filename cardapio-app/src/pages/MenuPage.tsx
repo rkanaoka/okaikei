@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { menuApi } from '../lib/api';
-import type { Category, MenuItem } from '../lib/types';
+import type { MenuItem } from '../lib/types';
+import { useMenu } from '../lib/MenuContext';
+import { useFavorites } from '../lib/FavoritesContext';
 import { useCart } from '../lib/CartContext';
 import { getSession, tableDisplay } from '../lib/session';
 import { getQrTable } from '../lib/qrTable';
 import { APP_MAX_WIDTH, C, FONT, PAGE_BACKGROUND, RADIUS, SHADOW, formatPrice, iconButton, itemEmoji } from '../theme';
 import ProdutoCard from '../components/ProdutoCard';
 import ItemDetailModal, { AddPayload } from '../components/ItemDetailModal';
-import { IconClose, IconReceipt, IconRefresh, IconSearch } from '../components/Icons';
+import { IconClose, IconHeart, IconReceipt, IconRefresh, IconSearch } from '../components/Icons';
+import { OffersCarousel, PopularRow } from '../components/Showcase';
 import { BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 
 /** Busca sem diferenciar maiúsculas e acentos ("salmao" encontra "Salmão"). */
@@ -17,6 +19,12 @@ function normalize(text: string): string {
 }
 
 function Splash() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setVisible(true), 400);
+    return () => window.clearTimeout(t);
+  }, []);
+  if (!visible) return <div style={{ minHeight: '100vh', background: C.bg }} aria-busy="true" />;
   return (
     <div
       role="status"
@@ -54,14 +62,13 @@ function Splash() {
   );
 }
 
-export default function MenuPage() {
+/** `view="favorites"` reaproveita a mesma tela (cards, detalhe, carrinho) só com os favoritos. */
+export default function MenuPage({ view = 'menu' }: { view?: 'menu' | 'favorites' }) {
   const navigate = useNavigate();
   const cart = useCart();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [items, setItems] = useState<MenuItem[]>([]);
+  const { categories, items, settings, loading, error, reload, categoryNameOf } = useMenu();
+  const favorites = useFavorites();
   const [activeCategory, setActiveCategory] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
   const [toast, setToast] = useState('');
@@ -78,21 +85,8 @@ export default function MenuPage() {
   const toastTimeout = useRef<number>();
   const [stickyOffset, setStickyOffset] = useState(64);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError('');
-    menuApi
-      .getAll()
-      .then(({ categories: cats, items: its }) => {
-        const sorted = [...cats].sort((a, b) => a.sortOrder - b.sortOrder);
-        setCategories(sorted);
-        setItems(its);
-      })
-      .catch(() => setError('Não foi possível carregar o cardápio. Verifique sua conexão e tente novamente.'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  // Ao alternar Cardápio ↔ Favoritos, volta ao topo
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
 
   // Fonte única para as seções da rolagem e para as abas: categorias com itens, na ordem.
   const categoriesWithItems = useMemo(
@@ -108,10 +102,26 @@ export default function MenuPage() {
     [categories, items]
   );
 
-  const categoryNameOf = useCallback(
-    (item: MenuItem) => categories.find((c) => c.id === item.categoryId || c.id === item.category)?.name,
-    [categories]
+  const itemsById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const popularItems = useMemo(
+    () => (settings.popular?.menuItemIds ?? []).map((id) => itemsById.get(id)).filter(Boolean) as MenuItem[],
+    [settings.popular, itemsById]
   );
+  const favoriteItems = useMemo(
+    () => favorites.ids.map((id) => itemsById.get(id)).filter(Boolean) as MenuItem[],
+    [favorites.ids, itemsById]
+  );
+
+  function favoriteProps(item: MenuItem) {
+    if (!settings.favorites) return undefined;
+    return {
+      active: favorites.isFavorite(item.id),
+      onToggle: () => {
+        const nowFav = favorites.toggle(item.id);
+        showToast(nowFav ? `${item.name} salvo nos favoritos` : `${item.name} removido dos favoritos`);
+      },
+    };
+  }
 
   const searchTerm = normalize(search.trim());
   const searchResults = useMemo(() => {
@@ -258,6 +268,8 @@ export default function MenuPage() {
             item={item}
             categoryName={categoryNameOf(item)}
             inCart={inCartByItem.get(item.id) ?? 0}
+            rating={settings.ratings?.[item.id]}
+            favorite={favoriteProps(item)}
             onAdd={handleQuickAdd}
             onOpenDetail={openDetail}
           />
@@ -347,8 +359,15 @@ export default function MenuPage() {
         </button>
       </header>
 
+      {view === 'favorites' && (
+        <div style={{ padding: '18px 16px 0' }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: C.text }}>Meus favoritos</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: C.textMuted }}>Salvos só neste celular.</p>
+        </div>
+      )}
+
       {/* Busca */}
-      <div style={{ padding: '14px 16px 4px' }}>
+      {view === 'menu' && <div style={{ padding: '14px 16px 4px' }}>
         <label
           style={{
             display: 'flex',
@@ -393,10 +412,23 @@ export default function MenuPage() {
             </button>
           )}
         </label>
-      </div>
+      </div>}
+
+      {/* Vitrine: ofertas e destaques (configurados no admin; somem durante a busca) */}
+      {view === 'menu' && !searchTerm && settings.offers && (
+        <OffersCarousel
+          title={settings.offers.title}
+          offers={settings.offers.items}
+          itemsById={itemsById}
+          onOpenItem={openDetail}
+        />
+      )}
+      {view === 'menu' && !searchTerm && settings.popular && (
+        <PopularRow title={settings.popular.title} items={popularItems} ratings={settings.ratings} onOpenItem={openDetail} />
+      )}
 
       {/* Abas de categoria fixas no topo (escondidas durante a busca) */}
-      {!searchTerm && categoriesWithItems.length > 0 && (
+      {view === 'menu' && !searchTerm && categoriesWithItems.length > 0 && (
         <nav
           ref={tabsWrapRef}
           aria-label="Categorias"
@@ -478,7 +510,7 @@ export default function MenuPage() {
             <div style={{ fontSize: 14, marginBottom: 14, color: C.textMuted }}>{error}</div>
             <button
               type="button"
-              onClick={load}
+              onClick={reload}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -500,7 +532,26 @@ export default function MenuPage() {
           </div>
         )}
 
-        {searchTerm ? (
+        {view === 'favorites' ? (
+          favoriteItems.length > 0 ? (
+            <section style={{ paddingTop: 8 }}>{renderGrid(favoriteItems)}</section>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '56px 24px', color: C.textMuted }}>
+              <div style={{ display: 'inline-flex', width: 72, height: 72, borderRadius: '50%', background: C.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <IconHeart size={34} color={C.primary} />
+              </div>
+              <div style={{ fontSize: 16, color: C.text, fontWeight: 500 }}>Nenhum favorito ainda</div>
+              <div style={{ fontSize: 13, marginTop: 4 }}>Toque no coração dos pratos que você gostou para encontrá-los aqui.</div>
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                style={{ marginTop: 18, border: 'none', borderRadius: RADIUS.pill, background: C.primary, color: '#fff', padding: '12px 26px', fontFamily: FONT, fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: SHADOW.button }}
+              >
+                Ver cardápio
+              </button>
+            </div>
+          )
+        ) : searchTerm ? (
           <section aria-live="polite">
             <h2 style={sectionTitle}>
               Resultados
@@ -622,6 +673,8 @@ export default function MenuPage() {
         item={detailItem}
         categoryName={detailItem ? categoryNameOf(detailItem) : undefined}
         similar={similarItems}
+        ratings={settings.ratings}
+        favorite={detailItem ? favoriteProps(detailItem) : undefined}
         onClose={closeDetail}
         onOpenItem={(item) => setDetailItem(item)}
         onAdd={(payload) => {

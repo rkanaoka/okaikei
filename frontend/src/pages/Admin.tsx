@@ -32,11 +32,12 @@ import FiscalConfig         from './admin/FiscalConfig';
 import FiscalModelos        from './admin/FiscalModelos';
 import FiscalItens          from './admin/FiscalItens';
 import FiscalNotas          from './admin/FiscalNotas';
+import CardapioDigital      from './admin/CardapioDigital';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SectionId =
   | 'dashboard'
-  | 'cardapio' | 'cardapio-categorias'
+  | 'cardapio' | 'cardapio-categorias' | 'cardapio-digital'
   | 'fin-pagamentos' | 'fin-gorjetas' | 'fin-frentes-caixa'
   | 'rel-clientes'   | 'rel-cupons' | 'rel-parcerias'
   | 'rel-itens'      | 'rel-faturamento' | 'rel-pedidos' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
@@ -54,6 +55,7 @@ const NAV: Array<
   { type:'group', label:'Cardápio', icon:'🍽️', permission:'cardapio', items:[
     { id:'cardapio',            label:'Itens do Cardápio' },
     { id:'cardapio-categorias', label:'Categorias' },
+    { id:'cardapio-digital',    label:'Cardápio digital' },
   ]},
   { type:'group', label:'Financeiro', icon:'💰', permission:'financeiro', items:[
     { id:'fin-pagamentos',    label:'Formas de pagamento' },
@@ -104,6 +106,7 @@ function renderSection(id: SectionId) {
     case 'dashboard':           return <Dashboard />;
     case 'cardapio':            return <Cardapio />;
     case 'cardapio-categorias': return <Categorias />;
+    case 'cardapio-digital':    return <CardapioDigital />;
     case 'fin-pagamentos':      return <FormasPagamento />;
     case 'fin-gorjetas':        return <AcertoGarcons />;
     case 'fin-frentes-caixa':   return <FrentesCaixa />;

@@ -1,11 +1,12 @@
 import axios from 'axios';
-import type { Category, MenuItem, Comanda, CartItem } from './types';
+import type { Category, MenuItem, Comanda, CartItem, MenuSettings } from './types';
 
 const http = axios.create({ baseURL: '/api' });
 
 export const menuApi = {
-  getAll(): Promise<{ categories: Category[]; items: MenuItem[] }> {
-    return http.get<{ categories: Category[]; items: MenuItem[] }>('/menu').then((r) => r.data);
+  // settings é opcional: backends/caches antigos ainda não enviam a vitrine
+  getAll(): Promise<{ categories: Category[]; items: MenuItem[]; settings?: MenuSettings }> {
+    return http.get<{ categories: Category[]; items: MenuItem[]; settings?: MenuSettings }>('/menu').then((r) => r.data);
   },
 };
 

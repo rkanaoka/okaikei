@@ -36,6 +36,21 @@ export class PrismaUserRepository implements UserRepositoryPort {
     });
   }
 
+  createInvited(data: { name: string; email: string; active: boolean; adminPermissions: string[] }): Promise<AuthUser> {
+    // Sem senha utilizável (mesmo critério do login Google): o acesso é só via Google.
+    return this.prisma.user.create({
+      data: {
+        id: uuidv7(),
+        name: data.name,
+        email: data.email,
+        password: bcrypt.hashSync(uuidv7(), 10),
+        role: 'WAITER',
+        active: data.active,
+        adminPermissions: data.adminPermissions,
+      },
+    });
+  }
+
   linkFirebaseUid(id: string, firebaseUid: string): Promise<AuthUser> {
     return this.prisma.user.update({ where: { id }, data: { firebaseUid } });
   }
@@ -44,7 +59,7 @@ export class PrismaUserRepository implements UserRepositoryPort {
     return this.prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
   }
 
-  updatePermissions(id: string, data: { active?: boolean; adminPermissions?: string[] }): Promise<AuthUser> {
+  updatePermissions(id: string, data: { name?: string; active?: boolean; adminPermissions?: string[] }): Promise<AuthUser> {
     return this.prisma.user.update({ where: { id }, data });
   }
 }

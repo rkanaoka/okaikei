@@ -39,9 +39,14 @@ export const authApi = {
   me:            () => http.get('/auth/me') as Promise<AuthUser>,
 };
 
+export type UserRow = AuthUser & { active: boolean; adminPermissions: string[]; firebaseUid: string | null; createdAt: string };
+
 export const usersApi = {
-  list:   () => http.get('/users') as Promise<Array<AuthUser & { active: boolean; adminPermissions: string[] }>>,
-  update: (id: string, d: { active?: boolean; adminPermissions?: string[] }) => http.patch(`/users/${id}`, d),
+  list:   () => http.get('/users') as unknown as Promise<UserRow[]>,
+  // Pré-cadastro: a pessoa entra com a conta Google deste e-mail e já recebe as permissões
+  create: (d: { name: string; email: string; active: boolean; adminPermissions: string[] }) =>
+    http.post('/users', d) as unknown as Promise<UserRow>,
+  update: (id: string, d: { name?: string; active?: boolean; adminPermissions?: string[] }) => http.patch(`/users/${id}`, d),
 };
 
 // ── Menu ─────────────────────────────────────────────────────────────────────
@@ -214,6 +219,31 @@ export const garconsApi = {
   update: (id: string, d: { name?: string; userId?: string | null; active?: boolean }) => http.patch(`/garcons/${id}`, d),
 
   getByCode: (code: string) => http.get(`/garcons/by-code/${encodeURIComponent(code)}`) as unknown as Promise<{ id: string; code: string; name: string }>,
+};
+
+// ── Cardápio Digital (vitrine do cardapio-app) ────────────────────────────────
+export type DigitalMenuOffer = {
+  id: string; active: boolean; highlight: string; title: string; subtitle: string;
+  menuItemId: string | null; color: string;
+};
+export type DigitalMenuSettings = {
+  welcome:   { enabled: boolean; title: string; subtitle: string; buttonLabel: string };
+  offers:    { enabled: boolean; title: string; items: DigitalMenuOffer[] };
+  popular:   { enabled: boolean; title: string; mode: 'auto' | 'manual'; menuItemIds: string[]; limit: number; days: number };
+  ratings:   { enabled: boolean; items: Record<string, { rating: number; reviews: number }> };
+  favorites: { enabled: boolean };
+  isSample:  boolean;
+  updatedAt: string | null;
+};
+export type DigitalMenuAdminData = {
+  settings: DigitalMenuSettings;
+  items: Array<{ id: string; name: string; price: number; available: boolean; category: string | null }>;
+  topSellers: Array<{ menuItemId: string; quantity: number }>;
+};
+
+export const cardapioDigitalApi = {
+  get:  () => http.get('/cardapio-digital/settings') as unknown as Promise<DigitalMenuAdminData>,
+  save: (s: DigitalMenuSettings) => http.put('/cardapio-digital/settings', s) as unknown as Promise<DigitalMenuSettings>,
 };
 
 // ── Formas de Pagamento ─────────────────────────────────────────────────────────

@@ -71,3 +71,22 @@ export interface Comanda {
   items: ComandaItem[];
   total: number;
 }
+
+// ── Vitrine (Admin > Cardápio > Cardápio digital) ───────────────────────────
+// Vem junto de GET /api/menu; cada bloco é null quando está desligado no admin.
+export interface MenuOffer {
+  id: string;
+  highlight: string;
+  title: string;
+  subtitle: string;
+  menuItemId: string | null;
+  color: string;
+}
+
+export interface MenuSettings {
+  welcome: { title: string; subtitle: string; buttonLabel: string } | null;
+  offers: { title: string; items: MenuOffer[] } | null;
+  popular: { title: string; menuItemIds: string[] } | null;
+  ratings: Record<string, { rating: number; reviews: number }> | null;
+  favorites: boolean;
+}

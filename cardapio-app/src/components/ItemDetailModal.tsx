@@ -4,6 +4,7 @@ import { APP_MAX_WIDTH, C, FONT, PAGE_BACKGROUND, RADIUS, SHADOW, formatPrice, i
 import FoodImage from './FoodImage';
 import QuantityControl from './QuantityControl';
 import { IconBack, IconBag, IconCart } from './Icons';
+import { FavoriteButton, Rating } from './Showcase';
 
 export interface AddPayload {
   item: MenuItem;
@@ -18,6 +19,9 @@ interface Props {
   categoryName?: string;
   /** Outros itens da mesma categoria, para "Você também pode gostar". */
   similar: MenuItem[];
+  ratings?: Record<string, { rating: number; reviews: number }> | null;
+  /** undefined = favoritos desligados no admin. */
+  favorite?: { active: boolean; onToggle: () => void };
   onClose: () => void;
   onAdd: (payload: AddPayload) => void;
   onOrderNow: (payload: AddPayload) => void;
@@ -26,7 +30,7 @@ interface Props {
 
 const DESCRIPTION_PREVIEW = 160;
 
-export default function ItemDetailModal({ item, categoryName, similar, onClose, onAdd, onOrderNow, onOpenItem }: Props) {
+export default function ItemDetailModal({ item, categoryName, similar, ratings, favorite, onClose, onAdd, onOrderNow, onOpenItem }: Props) {
   const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [quantity, setQuantity] = useState(1);
   const [expanded, setExpanded] = useState(false);
@@ -139,7 +143,11 @@ export default function ItemDetailModal({ item, categoryName, similar, onClose, 
             <IconBack size={20} strokeWidth={2.2} />
           </button>
           <span style={{ fontSize: 16, fontWeight: 500, color: C.text }}>Detalhes</span>
-          <span style={{ width: 42 }} aria-hidden="true" />
+          {favorite ? (
+            <FavoriteButton variant="header" active={favorite.active} onToggle={favorite.onToggle} label={item.name} />
+          ) : (
+            <span style={{ width: 42 }} aria-hidden="true" />
+          )}
         </header>
 
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 110 }}>
@@ -157,6 +165,9 @@ export default function ItemDetailModal({ item, categoryName, similar, onClose, 
 
             <div style={{ position: 'relative', width: '56%' }}>
               <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: C.text, lineHeight: 1.25 }}>{item.name}</h1>
+              {ratings?.[item.id]?.reviews ? (
+                <div style={{ marginTop: 6 }}><Rating value={ratings[item.id]} size="md" /></div>
+              ) : null}
               {categoryName && <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{categoryName}</div>}
 
               <div style={{ marginTop: 18 }}>

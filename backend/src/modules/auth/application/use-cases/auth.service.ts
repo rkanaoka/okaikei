@@ -44,7 +44,8 @@ export class AuthService {
 
     let user = await this.users.findByFirebaseUid(decoded.uid);
     if (!user) {
-      user = await this.users.findByEmail(email);
+      // Pré-cadastros do admin são salvos em minúsculas; o Google pode devolver o e-mail com maiúsculas
+      user = (await this.users.findByEmail(email.toLowerCase())) ?? (await this.users.findByEmail(email));
       user = user
         ? await this.users.linkFirebaseUid(user.id, decoded.uid)
         : await this.users.createFromFirebase({ name: decoded.name ?? email, email, firebaseUid: decoded.uid });

@@ -16,7 +16,9 @@ export interface UserRepositoryPort {
   findByEmail(email: string): Promise<AuthUser | null>;
   findByFirebaseUid(firebaseUid: string): Promise<AuthUser | null>;
   createFromFirebase(data: { name: string; email: string; firebaseUid: string }): Promise<AuthUser>;
+  /** Pré-cadastro feito no admin: a pessoa entra depois com a conta Google deste e-mail. */
+  createInvited(data: { name: string; email: string; active: boolean; adminPermissions: string[] }): Promise<AuthUser>;
   linkFirebaseUid(id: string, firebaseUid: string): Promise<AuthUser>;
   listAll(): Promise<AuthUser[]>;
-  updatePermissions(id: string, data: { active?: boolean; adminPermissions?: string[] }): Promise<AuthUser>;
+  updatePermissions(id: string, data: { name?: string; active?: boolean; adminPermissions?: string[] }): Promise<AuthUser>;
 }

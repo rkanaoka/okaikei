@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { uuidv7 } from 'uuidv7';
+import { CardapioDigitalSettingsService } from './cardapio-digital-settings.service';
 
 const OPTION_GROUPS_INCLUDE = {
   optionGroups: {
@@ -20,7 +21,10 @@ function orderGroups(groups: any[], order: string[]): any[] {
 
 @Injectable()
 export class CardapioDigitalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: CardapioDigitalSettingsService,
+  ) {}
 
   // ── GET /cardapio/menu ────────────────────────────────────────────────────
 
@@ -35,6 +39,9 @@ export class CardapioDigitalService {
     ]);
 
     return {
+      // Vitrine do app (boas-vindas, ofertas, destaques, avaliações, favoritos) —
+      // editada em Admin > Cardápio > Cardápio digital; só o que está ligado vem aqui.
+      settings: await this.settings.getPublic(items.map((i) => i.id)),
       categories: categories.map((c) => ({
         id: c.id,
         name: c.name,

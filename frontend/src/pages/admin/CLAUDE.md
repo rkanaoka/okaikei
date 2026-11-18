@@ -12,6 +12,7 @@ montado pelo shell `Admin.tsx` via roteamento interno (sidebar).
 | `Cardapio.tsx`           | CRUD de itens do cardápio                         |
 | `Categorias.tsx`         | Gestão de categorias                              |
 | `CardapioOpcoes.tsx`     | Grupos de opções (adicionais)                     |
+| `CardapioDigital.tsx`    | Vitrine do cardapio-app (boas-vindas, ofertas, destaques, avaliações, favoritos) |
 | `FormasPagamento.tsx`    | Cadastro/edição de formas de pagamento            |
 | `AcertoGarcons.tsx`      | Gorjetas compulsórias do dia                      |
 | `FrentesCaixa.tsx`       | Frentes de caixa abertas                          |
