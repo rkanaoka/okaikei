@@ -121,6 +121,17 @@ export class PrintingService {
     }
   }
 
+  /**
+   * Envia um ticket ESC/POS já montado por outro módulo (ex.: DANFE-NFC-e do módulo fiscal)
+   * para a impressora da categoria informada. Lança erro se a impressora não estiver configurada.
+   */
+  async printBuffer(category: string, ticket: Buffer) {
+    const printer = await this.getPrinter(category);
+    if (!printer || !printer.enabled) throw new Error(`Impressora '${category}' não configurada ou desativada`);
+    await this.escPos.send(printer.ip, printer.port, ticket);
+    this.logger.log(`Ticket enviado para ${category} (${printer.ip})`);
+  }
+
   async printSummary(comanda: any) {
     const printer = await this.getPrinter('cashier');
     if (!printer || !printer.enabled) throw new Error(`Impressora 'cashier' não configurada ou desativada`);

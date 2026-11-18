@@ -87,10 +87,36 @@ model MenuItem {
   availabilitySchedule Json?   @map("availability_schedule")
   // ids de OptionGroup, na ordem de exibição escolhida para este item (a vinculação em si é o relation abaixo)
   optionGroupOrder String[] @default([]) @map("option_group_order")
+
+  // ── Classificação fiscal (NFC-e / Focus NFe) ─────────────────────────────────
+  // Tudo opcional e SEM valor padrão tributário: nenhum código é preenchido por
+  // inferência. Editado só via módulo fiscal (permissão 'fiscal'); validado pelo
+  // contador. Nomes seguem os campos de item da API Focus NFe.
+  fiscalNcm                  String? @map("fiscal_ncm") @db.VarChar(8)
+  fiscalCest                 String? @map("fiscal_cest") @db.VarChar(7)
+  fiscalCfop                 String? @map("fiscal_cfop") @db.VarChar(4)
+  fiscalUnidadeComercial     String  @default("UN") @map("fiscal_unidade_comercial") @db.VarChar(6)
+  fiscalIcmsOrigem           String? @map("fiscal_icms_origem") @db.VarChar(1)
+  fiscalIcmsSituacao         String? @map("fiscal_icms_situacao") @db.VarChar(3) // CST (2) ou CSOSN (3)
+  fiscalPisSituacao          String? @map("fiscal_pis_situacao") @db.VarChar(2)
+  fiscalCofinsSituacao       String? @map("fiscal_cofins_situacao") @db.VarChar(2)
+  fiscalCodigoBeneficio      String? @map("fiscal_codigo_beneficio") @db.VarChar(10)
+  fiscalIbsCbsSituacao       String? @map("fiscal_ibs_cbs_situacao") @db.VarChar(3)
+  fiscalIbsCbsClassificacao  String? @map("fiscal_ibs_cbs_classificacao") @db.VarChar(6)
+  // Demais campos do item na API Focus, chaveados pelo nome exato do campo
+  // (ex.: icms_modalidade_base_calculo, icms_aliquota, pis_aliquota_porcentual).
+  // Permite acompanhar a Reforma Tributária sem nova migration — ver fiscal-item-fields.ts.
+  fiscalExtra                Json?   @map("fiscal_extra")
+  // Modelo fiscal (grupo de produtos) aplicado a este item. Quando preenchido, os campos fiscal_* acima
+  // são materializados a partir do modelo (e atualizados quando o modelo muda). null = classificação manual.
+  fiscalTemplateId           String? @map("fiscal_template_id") @db.Uuid
+  fiscalTemplateCfop         String? @map("fiscal_template_cfop") @db.VarChar(4)
+
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   menuCategory MenuCategory?  @relation(fields: [categoryId], references: [id])
+  fiscalTemplate FiscalTemplate? @relation(fields: [fiscalTemplateId], references: [id], onDelete: SetNull)
   comandaItems ComandaItem[]
   optionGroups OptionGroup[]  @relation("MenuItemOptionGroups")
   partnershipCoupons PartnershipCoupon[]
@@ -98,6 +124,7 @@ model MenuItem {
   @@index([category])
   @@index([available])
   @@index([categoryId])
+  @@index([fiscalTemplateId])
   @@map("menu_items")
 }
 
@@ -548,6 +575,77 @@ model SystemConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_config")
+}
+
+// ─── Fiscal (NFC-e via Focus NFe) ─────────────────────────────────────────────
+// Módulo opcional (modules/fiscal). Sem FK para comandas: o histórico fiscal
+// sobrevive a qualquer alteração/limpeza do PDV e à desativação do módulo.
+// Modelo fiscal reutilizável por grupo de produtos (alcoólicos, bebidas industrializadas, comida, jogos...).
+// `data` segue a estrutura de domain/value-objects/fiscal-template.ts (impostos, CFOPs, NCM, CEST, origem...).
+model FiscalTemplate {
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name        String   @db.VarChar(120)
+  description String?  @db.VarChar(300)
+  active      Boolean  @default(true)
+  data        Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  menuItems MenuItem[]
+
+  @@map("fiscal_templates")
+}
+
+model FiscalDocument {
+  id            String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  comandaId     String   @map("comanda_id") @db.Uuid
+  ref           String   @unique @db.VarChar(60)   // referência enviada à Focus (única por token)
+  attempt       Int      @default(1)               // 1ª emissão da comanda, 2ª após cancelamento...
+  ambiente      String   @db.VarChar(15)           // homologacao | producao
+  // PENDENTE | PROCESSANDO | AUTORIZADO | REJEITADO | ERRO_COMUNICACAO | CANCELADO
+  status        String   @db.VarChar(25)
+  trigger       String   @db.VarChar(10)           // auto | manual
+  focusStatus   String?  @map("focus_status") @db.VarChar(40)  // status cru da Focus
+  statusSefaz   String?  @map("status_sefaz") @db.VarChar(10)
+  mensagemSefaz String?  @map("mensagem_sefaz")
+  chaveNfe      String?  @map("chave_nfe") @db.VarChar(44)
+  numero        String?  @db.VarChar(15)
+  serie         String?  @db.VarChar(5)
+  protocolo     String?  @db.VarChar(30)
+  qrcodeUrl     String?  @map("qrcode_url")
+  urlConsultaNf String?  @map("url_consulta_nf")
+  caminhoXml    String?  @map("caminho_xml")
+  caminhoDanfe  String?  @map("caminho_danfe")
+  total         Decimal  @default(0) @db.Decimal(12, 2)
+  requestPayload  Json?  @map("request_payload")
+  responsePayload Json?  @map("response_payload")  // última resposta da Focus (sem segredos)
+  errorMessage  String?  @map("error_message")
+  printedAt     DateTime? @map("printed_at")
+  cancelledAt   DateTime? @map("cancelled_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([comandaId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("fiscal_documents")
+}
+
+model FiscalAuditLog {
+  id         String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  documentId String?  @map("document_id") @db.Uuid
+  comandaId  String?  @map("comanda_id") @db.Uuid
+  action     String   @db.VarChar(40)   // EMIT | CONSULT | CANCEL | INUTILIZE | EMAIL | PRINT | SETTINGS | ITEM_FISCAL | TOGGLE
+  actor      String   @db.VarChar(80)   // 'system' ou id/nome do usuário
+  success    Boolean  @default(true)
+  httpStatus Int?     @map("http_status")
+  detail     Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([documentId])
+  @@index([comandaId])
+  @@index([createdAt])
+  @@map("fiscal_audit_logs")
 }
 
 // ─── Estoque de Insumos ─────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ Módulos de negócio do sistema. Cada pasta representa um domínio ou capacidade
 | `reasons/`       | Motivos de cancelamento/desconto       |
 | `sync/`          | Sincronização offline→nuvem            |
 | `config/`        | Configurações do sistema               |
+| `fiscal/`        | NFC-e via Focus NFe (opcional, ver `fiscal/CLAUDE.md`) |
 | `auth/`          | Autenticação                           |
 | `health/`        | Health check                           |
 

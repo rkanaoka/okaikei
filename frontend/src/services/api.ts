@@ -24,7 +24,8 @@ http.interceptors.response.use(
   (r) => r.data,
   (err) => {
     const msg = err.response?.data?.message ?? err.message ?? 'Erro desconhecido';
-    return Promise.reject(new Error(msg));
+    // `errors`/`issues` (listas detalhadas, ex.: validação fiscal) ficam disponíveis em e.errors / e.issues.
+    return Promise.reject(Object.assign(new Error(msg), { errors: err.response?.data?.errors, issues: err.response?.data?.issues }));
   },
 );
 
@@ -418,3 +419,103 @@ export const nfeImportApi = {
 };
 
 export default http;
+
+// ── Fiscal (NFC-e / Focus NFe) ─────────────────────────────────────────────────
+// O token da Focus fica só no servidor (.env). O frontend nunca o recebe: só vê "configurado: sim/não".
+export type FiscalIssue = { field: string; message: string; severity: 'error' | 'warning'; itemId?: string; itemName?: string };
+
+export type FiscalSettings = {
+  ambiente: 'homologacao' | 'producao';
+  cnpjEmitente: string; razaoSocial: string; nomeFantasia: string; inscricaoEstadual: string; endereco: string;
+  regime: 'simples' | 'normal'; naturezaOperacao: string;
+  autoEmit: boolean; printAfterAuthorize: boolean; exigirIbsCbs: boolean; timeoutMs: number;
+  paymentMethodMap: Record<string, string>;
+};
+
+export type FiscalOverview = {
+  enabled: boolean;
+  settings: FiscalSettings;
+  token: { homologacao: boolean; producao: boolean; ambienteAtivoConfigurado: boolean };
+  baseUrl: string;
+  pendencias: string[];
+  paymentMethods: Array<{ code: string; label: string; active: boolean; formaPagamentoFiscal: string | null }>;
+  formasPagamentoFiscais: Record<string, string>;
+};
+
+export type FiscalItemData = {
+  ncm?: string | null; cest?: string | null; cfop?: string | null; unidadeComercial?: string | null;
+  icmsOrigem?: string | null; icmsSituacao?: string | null; pisSituacao?: string | null; cofinsSituacao?: string | null;
+  codigoBeneficio?: string | null; ibsCbsSituacao?: string | null; ibsCbsClassificacao?: string | null;
+  extra?: Record<string, string | number | boolean> | null;
+};
+
+export type FiscalItemRow = {
+  id: string; name: string; price: number; available: boolean; category: string;
+  fiscal: FiscalItemData; issues: FiscalIssue[]; status: 'ok' | 'atencao' | 'pendente';
+  template: { id: string; name: string; cfop: string | null } | null;
+};
+
+// Modelo fiscal por grupo de produtos (alcoólicos, bebidas, comida...). Ver backend domain/value-objects/fiscal-template.ts.
+export type FiscalTemplateCfop = { cfop: string; icmsSituacao: string; pisSituacao: string; cofinsSituacao: string };
+export type FiscalTemplateData = {
+  ncm?: string | null; cest?: string | null; origem?: string | null; codigoBeneficio?: string | null; unidadeComercial?: string | null;
+  escalaRelevante?: boolean | null; cnpjFabricante?: string | null;
+  creditoPresumido?: { codigo?: string | null; percentual?: string | null };
+  icms?: { modalidadeBase?: string | null; reducaoBase?: string | null; aliquota?: string | null; fcp?: string | null; aliquotaCreditoSimples?: string | null };
+  icmsSt?: { modalidadeBase?: string | null; reducaoBase?: string | null; aliquota?: string | null; mva?: string | null; fcp?: string | null };
+  pis?: { aliquota?: string | null }; cofins?: { aliquota?: string | null };
+  ibsCbs?: { situacao?: string | null; classificacao?: string | null; ibsUfAliquota?: string | null; ibsMunAliquota?: string | null; cbsAliquota?: string | null };
+  cfops: FiscalTemplateCfop[];
+  extra?: Record<string, string | number | boolean> | null;
+};
+export type FiscalTemplate = {
+  id: string; name: string; description: string | null; active: boolean; data: FiscalTemplateData;
+  itemCount: number; complete: boolean; updatedAt: string;
+  byCfop: Array<{ cfop: string; complete: boolean; issues: FiscalIssue[] }>;
+};
+
+export type FiscalDocument = {
+  id: string; comandaId: string; ref: string; attempt: number; ambiente: string; status: string; trigger: string;
+  statusSefaz: string | null; mensagemSefaz: string | null; chaveNfe: string | null; numero: string | null; serie: string | null;
+  protocolo: string | null; qrcodeUrl: string | null; urlConsultaNf: string | null; total: string | number;
+  errorMessage: string | null; printedAt: string | null; cancelledAt: string | null; createdAt: string; updatedAt: string;
+  xmlUrl?: string | null; danfeUrl?: string | null; historico?: any[];
+};
+
+const SLOW = { timeout: 90_000 }; // emissão é síncrona na SEFAZ
+
+export const fiscalApi = {
+  status:   () => http.get('/fiscal/status') as unknown as Promise<{ enabled: boolean }>,
+  overview: () => http.get('/fiscal/settings') as unknown as Promise<FiscalOverview>,
+  saveSettings: (settings: Partial<FiscalSettings>) => http.put('/fiscal/settings', { settings }) as unknown as Promise<FiscalOverview>,
+  setEnabled:   (enabled: boolean) => http.put('/fiscal/enabled', { enabled }) as unknown as Promise<{ enabled: boolean }>,
+
+  items:      (pending = false) => http.get('/fiscal/items', { params: pending ? { pending: 'true' } : {} }) as unknown as
+    Promise<{ total: number; pendentes: number; atencao: number; items: FiscalItemRow[] }>,
+  saveItem:   (id: string, d: FiscalItemData) => http.put(`/fiscal/items/${id}`, d) as unknown as Promise<FiscalItemRow>,
+
+  templates:      () => http.get('/fiscal/templates') as unknown as Promise<FiscalTemplate[]>,
+  createTemplate: (d: { name: string; description?: string | null; active?: boolean; data: FiscalTemplateData }) =>
+    http.post('/fiscal/templates', d) as unknown as Promise<FiscalTemplate>,
+  updateTemplate: (id: string, d: { name: string; description?: string | null; active?: boolean; data: FiscalTemplateData }) =>
+    http.put(`/fiscal/templates/${id}`, d) as unknown as Promise<FiscalTemplate>,
+  setTemplateActive: (id: string, active: boolean) => http.put(`/fiscal/templates/${id}/active`, { active }) as unknown as Promise<FiscalTemplate>,
+  deleteTemplate: (id: string) => http.delete(`/fiscal/templates/${id}`),
+  applyTemplate:  (d: { templateId: string | null; itemIds: string[]; cfop?: string | null }) =>
+    http.post('/fiscal/items/apply-template', d) as unknown as Promise<{ applied: number }>,
+
+  documents:  (q: { status?: string; comandaId?: string; from?: string; to?: string; limit?: number } = {}) =>
+    http.get('/fiscal/documents', { params: q }) as unknown as Promise<FiscalDocument[]>,
+  document:   (id: string) => http.get(`/fiscal/documents/${id}`) as unknown as Promise<FiscalDocument>,
+  cancel:     (id: string, justificativa: string) => http.post(`/fiscal/documents/${id}/cancel`, { justificativa }, SLOW),
+  inutilizar: (d: { serie: string; numeroInicial: number; numeroFinal: number; justificativa: string }) =>
+    http.post('/fiscal/inutilizacao', d, SLOW),
+
+  // Caixa
+  byComanda:  (comandaId: string) => http.get(`/fiscal/comandas/${comandaId}`) as unknown as Promise<FiscalDocument[]>,
+  preview:    (comandaId: string) => http.get(`/fiscal/comandas/${comandaId}/preview`) as unknown as Promise<{ canEmit: boolean; issues: FiscalIssue[]; total: number }>,
+  emit:       (comandaId: string) => http.post(`/fiscal/comandas/${comandaId}/emit`, {}, SLOW) as unknown as Promise<{ document: FiscalDocument; outcome: string }>,
+  consult:    (id: string) => http.post(`/fiscal/documents/${id}/consult`, {}, SLOW) as unknown as Promise<FiscalDocument>,
+  print:      (id: string) => http.post(`/fiscal/documents/${id}/print`, {}),
+  email:      (id: string, emails: string[]) => http.post(`/fiscal/documents/${id}/email`, { emails }),
+};

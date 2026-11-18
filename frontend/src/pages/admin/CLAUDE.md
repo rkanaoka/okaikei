@@ -23,6 +23,11 @@ montado pelo shell `Admin.tsx` via roteamento interno (sidebar).
 | `MotivosDesconto.tsx`    | Motivos de desconto                               |
 | `ModelosImpressao.tsx`   | Modelos de impressão de comandas                  |
 | `ConfigLoja.tsx`         | Dados da loja (nome, CNPJ, rodapé)                |
+| `FiscalConfig.tsx`       | Fiscal: ativar módulo, ambiente, emitente, pagamentos |
+| `FiscalModelos.tsx`      | Fiscal: modelos de dados fiscais por grupo de produtos (impostos, CFOPs, CEST, NCM) |
+| `fiscalOptions.ts`       | Listas de códigos fiscais (CST/CSOSN, origem, modalidades) |
+| `FiscalItens.tsx`        | Fiscal: classificação dos produtos (modelo ou manual, aplicação em lote) + alertas |
+| `FiscalNotas.tsx`        | Fiscal: notas emitidas, cancelar, inutilizar, e-mail |
 
 ## Convenções
 - Importar sempre de `./shared` para componentes e constantes comuns

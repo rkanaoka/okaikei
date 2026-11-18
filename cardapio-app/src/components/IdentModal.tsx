@@ -1,15 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { QrTable } from '../lib/qrTable';
+import { APP_MAX_WIDTH, C, FONT, RADIUS, SHADOW, formatPrice } from '../theme';
+import { IconBag, IconTable } from './Icons';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onConfirm: (customerName: string, tableNumber: string) => Promise<void>;
   qrTable?: QrTable | null;
+  /** Resumo exibido acima do botão ("3 itens · R$ 120,00"). */
+  itemCount: number;
+  total: number;
 }
 
-export default function IdentModal({ open, onClose, onConfirm, qrTable }: Props) {
-  const [customerName, setCustomerName] = useState('');
+const NAME_KEY = 'bdg_last_name';
+
+export default function IdentModal({ open, onClose, onConfirm, qrTable, itemCount, total }: Props) {
+  // Lembra o nome do último pedido neste aparelho — evita redigitar a cada visita
+  const [customerName, setCustomerName] = useState(() => {
+    try { return localStorage.getItem(NAME_KEY) ?? ''; } catch { return ''; }
+  });
   const [tableNumber, setTableNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -27,174 +37,179 @@ export default function IdentModal({ open, onClose, onConfirm, qrTable }: Props)
     e.preventDefault();
     setError('');
     if (!customerName.trim()) {
-      setError('Por favor, informe seu nome.');
+      setError('Informe seu nome para chamarmos você.');
       return;
     }
     if (!qrTable && (!tableNumber.trim() || isNaN(Number(tableNumber)))) {
-      setError('Por favor, informe um número de mesa válido.');
+      setError('Informe o número da sua mesa.');
       return;
     }
     setLoading(true);
     try {
-      // Mesa já identificada pelo QR Code — o valor real (tableId) é resolvido
-      // por App.tsx a partir da sessão; aqui só confirmamos o nome.
+      try { localStorage.setItem(NAME_KEY, customerName.trim()); } catch { /* armazenamento indisponível */ }
+      // Mesa identificada pelo QR Code: o tableId é resolvido no App a partir da sessão
       await onConfirm(customerName.trim(), tableNumber.trim());
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : 'Erro ao enviar pedido. Tente novamente.';
-      setError(msg);
+      setError(err instanceof Error ? err.message : 'Erro ao enviar pedido. Tente novamente.');
       setLoading(false);
     }
   }
 
-  const overlayStyle: React.CSSProperties = {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(13,27,42,0.6)',
-    zIndex: 200,
-    display: 'flex',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  };
-
-  const panelStyle: React.CSSProperties = {
-    background: '#fff',
-    borderRadius: '20px 20px 0 0',
+  const label: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 6, display: 'block' };
+  const input: React.CSSProperties = {
     width: '100%',
-    maxWidth: 480,
-    padding: '28px 20px 40px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 16,
-  };
-
-  const titleStyle: React.CSSProperties = {
-    fontSize: 20,
-    fontWeight: 800,
-    color: '#0D1B2A',
-    textAlign: 'center',
-  };
-
-  const subtitleStyle: React.CSSProperties = {
-    fontSize: 13,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: -8,
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 13,
-    fontWeight: 600,
-    color: '#0D1B2A',
-    marginBottom: 4,
-    display: 'block',
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '12px 14px',
-    fontSize: 16,
-    border: '1.5px solid #ddd',
-    borderRadius: 10,
+    height: 52,
+    padding: '0 16px',
+    fontFamily: FONT,
+    fontSize: 16, // ≥16px evita zoom automático no iOS
+    border: `1.5px solid ${C.border}`,
+    borderRadius: 14,
     outline: 'none',
-    color: '#0D1B2A',
-    background: '#fafafa',
-  };
-
-  const errorStyle: React.CSSProperties = {
-    background: '#fff0f0',
-    border: '1px solid #E63946',
-    borderRadius: 8,
-    padding: '10px 14px',
-    color: '#E63946',
-    fontSize: 13,
-    fontWeight: 600,
-  };
-
-  const confirmBtnStyle: React.CSSProperties = {
-    background: loading ? '#aaa' : '#FFD60A',
-    color: '#0D1B2A',
-    border: 'none',
-    borderRadius: 12,
-    padding: '16px 0',
-    fontSize: 16,
-    fontWeight: 800,
-    cursor: loading ? 'not-allowed' : 'pointer',
-    width: '100%',
-    letterSpacing: 0.3,
-  };
-
-  const cancelBtnStyle: React.CSSProperties = {
-    background: 'transparent',
-    color: '#666',
-    border: 'none',
-    fontSize: 14,
-    cursor: 'pointer',
-    padding: '8px 0',
-    textAlign: 'center',
-    width: '100%',
+    color: C.text,
+    background: C.surface,
   };
 
   return (
-    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && !loading && onClose()}>
-      <div style={panelStyle}>
-        <div style={titleStyle}>Identificação</div>
-        <div style={subtitleStyle}>Precisamos saber quem você é e onde está sentado</div>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ident-title"
+      onClick={(e) => e.target === e.currentTarget && !loading && onClose()}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(31,31,31,0.45)',
+        zIndex: 200,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        fontFamily: FONT,
+        animation: 'bdg-fade 0.18s ease-out',
+      }}
+    >
+      <div
+        style={{
+          background: C.bg,
+          borderRadius: '26px 26px 0 0',
+          width: '100%',
+          maxWidth: APP_MAX_WIDTH,
+          padding: '12px 20px calc(24px + env(safe-area-inset-bottom))',
+          animation: 'bdg-slide-up 0.22s ease-out',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }} aria-hidden="true">
+          <span style={{ width: 44, height: 5, borderRadius: 3, background: '#DADADA' }} />
+        </div>
+        <h2 id="ident-title" style={{ margin: 0, fontSize: 21, fontWeight: 600, color: C.text, textAlign: 'center' }}>
+          Quase lá! 👋
+        </h2>
+        <p style={{ margin: '6px 0 20px', fontSize: 14, color: C.textMuted, textAlign: 'center' }}>
+          Só precisamos saber quem é você e onde está sentado.
+        </p>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <label style={labelStyle} htmlFor="customerName">
-              Seu nome
-            </label>
+            <label style={label} htmlFor="customerName">Seu nome</label>
             <input
               id="customerName"
-              style={inputStyle}
+              style={input}
               type="text"
-              placeholder="Ex: João Silva"
+              placeholder="Ex.: João"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
+              onFocus={(e) => (e.currentTarget.style.borderColor = C.primary)}
+              onBlur={(e) => (e.currentTarget.style.borderColor = C.border)}
               disabled={loading}
-              autoFocus
-              autoComplete="name"
+              autoFocus={!customerName}
+              autoComplete="given-name"
+              enterKeyHint={qrTable ? 'send' : 'next'}
+              maxLength={60}
             />
           </div>
 
           {qrTable ? (
             <div>
-              <label style={labelStyle}>Mesa</label>
-              <div style={{ ...inputStyle, display: 'flex', alignItems: 'center', gap: 8, background: '#f0f7ff', borderColor: '#0D1B2A' }}>
-                <span>✓</span>
-                <span style={{ fontWeight: 700 }}>{qrTable.label || 'Identificada pelo QR Code'}</span>
+              <span style={label}>Mesa</span>
+              <div
+                style={{
+                  ...input,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  background: C.primarySoft,
+                  borderColor: 'transparent',
+                  color: C.primaryDark,
+                  fontWeight: 600,
+                }}
+              >
+                <IconTable size={20} />
+                {qrTable.label || 'Identificada pelo QR Code'}
+                <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 500 }}>✓ via QR Code</span>
               </div>
             </div>
           ) : (
             <div>
-              <label style={labelStyle} htmlFor="tableNumber">
-                Número da mesa
-              </label>
+              <label style={label} htmlFor="tableNumber">Número da mesa</label>
               <input
                 id="tableNumber"
-                style={inputStyle}
-                type="number"
+                style={input}
+                type="text"
                 inputMode="numeric"
-                placeholder="Ex: 5"
+                pattern="[0-9]*"
+                placeholder="Ex.: 5"
                 value={tableNumber}
-                onChange={(e) => setTableNumber(e.target.value)}
+                onChange={(e) => setTableNumber(e.target.value.replace(/\D/g, ''))}
+                onFocus={(e) => (e.currentTarget.style.borderColor = C.primary)}
+                onBlur={(e) => (e.currentTarget.style.borderColor = C.border)}
                 disabled={loading}
-                min="1"
+                enterKeyHint="send"
+                maxLength={4}
               />
             </div>
           )}
 
-          {error && <div style={errorStyle}>{error}</div>}
+          {error && (
+            <div role="alert" style={{ background: '#FDECEC', color: C.danger, borderRadius: 12, padding: '10px 14px', fontSize: 13 }}>
+              {error}
+            </div>
+          )}
 
-          <button type="submit" style={confirmBtnStyle} disabled={loading}>
-            {loading ? 'Enviando pedido...' : 'Confirmar pedido →'}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              height: 56,
+              marginTop: 4,
+              border: 'none',
+              borderRadius: RADIUS.pill,
+              background: loading ? '#FFB49C' : C.primary,
+              color: '#fff',
+              boxShadow: SHADOW.button,
+              fontFamily: FONT,
+              fontSize: 16,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              cursor: loading ? 'wait' : 'pointer',
+            }}
+          >
+            <IconBag size={20} strokeWidth={2} />
+            {loading ? 'Enviando pedido…' : `Confirmar pedido · ${formatPrice(total)}`}
           </button>
+          <div style={{ textAlign: 'center', fontSize: 12, color: C.textMuted, marginTop: -6 }}>
+            {itemCount} {itemCount === 1 ? 'item' : 'itens'} no pedido
+          </div>
         </form>
 
-        <button style={cancelBtnStyle} onClick={onClose} disabled={loading}>
-          Cancelar
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={loading}
+          style={{ width: '100%', marginTop: 8, padding: '10px 0', border: 'none', background: 'none', fontFamily: FONT, fontSize: 14, color: C.textMuted, cursor: 'pointer' }}
+        >
+          Voltar ao carrinho
         </button>
       </div>
     </div>

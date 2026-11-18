@@ -18,6 +18,7 @@ valida entrada (DTOs), delega para use-cases e retorna resposta.
 | `reasons.controller.ts`       | reasons              | `/api/reasons`       |
 | `payment-methods.controller.ts` | payment-methods    | `/api/payment-methods` |
 | `sync.controller.ts`          | sync                 | `/api/sync`          |
+| `fiscal.controller.ts`        | fiscal               | `/api/fiscal`        |
 
 ## Regras obrigatórias
 1. Importar service do módulo via `@/modules/*/application/use-cases/`

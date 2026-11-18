@@ -2,20 +2,40 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#0D1B2A" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#FF7247" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Bodogami — Cardápio</title>
   <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f4f6f8;
-      color: #0D1B2A;
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #F7F7F7;
+      color: #1F1F1F;
       -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
     }
     #root { min-height: 100vh; }
+    button { font-family: inherit; }
+    button:focus-visible, [role="button"]:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 2px solid #FF7247;
+      outline-offset: 2px;
+    }
+    /* Barras de rolagem horizontais (categorias, "você também pode gostar") ficam ocultas */
+    ::-webkit-scrollbar { width: 0; height: 0; }
+    input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+    @keyframes bdg-slide-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes bdg-fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes bdg-pop { from { transform: translateX(-50%) scale(0.92); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+    @keyframes bdg-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    }
   </style>
 </head>
 <body>

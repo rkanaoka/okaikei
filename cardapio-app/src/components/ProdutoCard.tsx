@@ -1,162 +1,160 @@
 import React from 'react';
 import type { MenuItem } from '../lib/types';
+import { C, FONT, RADIUS, SHADOW, formatPrice } from '../theme';
+import FoodImage from './FoodImage';
+import { IconPlus } from './Icons';
 
 interface Props {
   item: MenuItem;
+  categoryName?: string;
+  /** Quantidade já no carrinho — mostrada como selo no botão de adicionar. */
+  inCart?: number;
   onAdd: (item: MenuItem) => void;
   onOpenDetail: (item: MenuItem) => void;
 }
 
-function formatPrice(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-export default function ProdutoCard({ item, onAdd, onOpenDetail }: Props) {
-  const cardStyle: React.CSSProperties = {
-    background: '#fff',
-    borderRadius: 12,
-    boxShadow: '0 2px 8px rgba(13,27,42,0.08)',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'relative',
-    opacity: item.available ? 1 : 0.55,
-    cursor: item.available ? 'pointer' : 'default',
-  };
-
-  const imgContainerStyle: React.CSSProperties = {
-    width: '100%',
-    height: 120,
-    background: '#f0f0f0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    flexShrink: 0,
-  };
-
-  const bodyStyle: React.CSSProperties = {
-    padding: '10px 12px 12px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    flex: 1,
-  };
-
-  const nameStyle: React.CSSProperties = {
-    fontSize: 14,
-    fontWeight: 700,
-    color: '#0D1B2A',
-    lineHeight: 1.3,
-  };
-
-  const descStyle: React.CSSProperties = {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 1.4,
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
-  };
-
-  const footerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 'auto',
-    paddingTop: 8,
-  };
-
-  const priceStyle: React.CSSProperties = {
-    fontSize: 15,
-    fontWeight: 800,
-    color: '#0D1B2A',
-  };
-
-  const addBtnStyle: React.CSSProperties = {
-    width: 32,
-    height: 32,
-    borderRadius: '50%',
-    background: item.available ? '#2DC653' : '#ccc',
-    color: '#fff',
-    border: 'none',
-    fontSize: 22,
-    fontWeight: 700,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: item.available ? 'pointer' : 'not-allowed',
-    lineHeight: 1,
-    flexShrink: 0,
-  };
-
-  const overlayStyle: React.CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    background: 'rgba(255,255,255,0.55)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-  };
-
-  const unavailableLabelStyle: React.CSSProperties = {
-    background: '#555',
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 700,
-    padding: '4px 10px',
-    borderRadius: 20,
-    letterSpacing: 0.5,
-  };
-
+export default function ProdutoCard({ item, categoryName, inCart = 0, onAdd, onOpenDetail }: Props) {
   const hasOptions = (item.optionGroups?.length ?? 0) > 0;
 
   function handleQuickAdd(e: React.MouseEvent) {
     e.stopPropagation();
     if (!item.available) return;
-    // Item com grupos de opções sempre precisa passar pela tela de
-    // customização antes de ir pro carrinho.
+    // Item com grupos de opções sempre passa pela tela de detalhes antes do carrinho.
     if (hasOptions) onOpenDetail(item);
     else onAdd(item);
   }
 
   return (
-    <div style={cardStyle} onClick={() => onOpenDetail(item)}>
-      <div style={imgContainerStyle}>
-        {item.imageUrl ? (
-          <img
-            src={item.imageUrl}
-            alt={item.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : (
-          <span style={{ fontSize: 40 }}>🍱</span>
-        )}
+    <article
+      onClick={() => onOpenDetail(item)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpenDetail(item);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${item.name}, ${formatPrice(item.price)}${item.available ? '' : ', indisponível'}`}
+      style={{
+        background: C.surface,
+        borderRadius: RADIUS.md,
+        boxShadow: SHADOW.card,
+        padding: '14px 12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        cursor: 'pointer',
+        fontFamily: FONT,
+        minWidth: 0,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0 12px', opacity: item.available ? 1 : 0.45 }}>
+        <FoodImage src={item.imageUrl} alt={item.name} hint={[categoryName, item.description]} size={112} />
       </div>
 
-      <div style={bodyStyle}>
-        <span style={nameStyle}>{item.name}</span>
-        {item.description && <span style={descStyle}>{item.description}</span>}
-        <div style={footerStyle}>
-          <span style={priceStyle}>{formatPrice(item.price)}</span>
-          <button
-            style={addBtnStyle}
-            disabled={!item.available}
-            onClick={handleQuickAdd}
-            aria-label={hasOptions ? `Ver opções de ${item.name}` : `Adicionar ${item.name}`}
+      <button
+        type="button"
+        onClick={handleQuickAdd}
+        disabled={!item.available}
+        aria-label={hasOptions ? `Escolher opções de ${item.name}` : `Adicionar ${item.name} ao carrinho`}
+        style={{
+          position: 'absolute',
+          top: 10,
+          right: 10,
+          width: 34,
+          height: 34,
+          borderRadius: '50%',
+          border: 'none',
+          background: item.available ? C.primary : '#D9D9D9',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: item.available ? 'pointer' : 'not-allowed',
+          boxShadow: item.available ? SHADOW.button : 'none',
+        }}
+      >
+        <IconPlus size={18} strokeWidth={2.6} />
+        {inCart > 0 && (
+          <span
+            aria-label={`${inCart} no carrinho`}
+            style={{
+              position: 'absolute',
+              top: -5,
+              right: -5,
+              minWidth: 18,
+              height: 18,
+              padding: '0 4px',
+              borderRadius: 9,
+              background: C.text,
+              color: '#fff',
+              fontSize: 10,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid #fff',
+            }}
           >
-            +
-          </button>
-        </div>
-      </div>
+            {inCart > 9 ? '9+' : inCart}
+          </span>
+        )}
+      </button>
 
-      {!item.available && (
-        <div style={overlayStyle}>
-          <span style={unavailableLabelStyle}>Indisponível</span>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
+        <span style={{ fontSize: 15, fontWeight: 600, color: C.primary }}>{formatPrice(item.price)}</span>
+      </div>
+      <h4
+        style={{
+          margin: 0,
+          fontSize: 14,
+          fontWeight: 600,
+          color: C.text,
+          lineHeight: 1.35,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}
+      >
+        {item.name}
+      </h4>
+      {item.description && (
+        <p
+          style={{
+            margin: '4px 0 0',
+            fontSize: 12,
+            color: C.textMuted,
+            lineHeight: 1.45,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
+          {item.description}
+        </p>
       )}
-    </div>
+      {!item.available && (
+        <span
+          style={{
+            marginTop: 8,
+            alignSelf: 'flex-start',
+            fontSize: 11,
+            fontWeight: 600,
+            color: C.textMuted,
+            background: '#F1F1F1',
+            borderRadius: RADIUS.pill,
+            padding: '3px 10px',
+          }}
+        >
+          Indisponível
+        </span>
+      )}
+      {hasOptions && item.available && (
+        <span style={{ marginTop: 8, fontSize: 11, color: C.textMuted }}>Personalizável</span>
+      )}
+    </article>
   );
 }

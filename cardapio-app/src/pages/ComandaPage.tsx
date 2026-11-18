@@ -1,71 +1,81 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { pedidosApi } from '../lib/api';
 import type { Comanda } from '../lib/types';
-import { getSession, clearSession } from '../lib/session';
-import { getCart, clearCart, cartCount } from '../lib/cart';
-import CartDrawer from '../components/CartDrawer';
+import { getSession, clearSession, tableDisplay } from '../lib/session';
+import { useCart } from '../lib/CartContext';
+import { APP_MAX_WIDTH, C, FONT, PAGE_BACKGROUND, RADIUS, SHADOW, formatPrice, iconButton } from '../theme';
+import { BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
+import FoodImage from '../components/FoodImage';
+import { IconBack, IconPlus, IconRefresh } from '../components/Icons';
 
 const POLL_INTERVAL = 15_000;
 
-function formatPrice(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-function statusLabel(status: string): { icon: string; text: string; color: string } {
+function itemStatus(status: string): { text: string; color: string; bg: string } {
   switch (status.toUpperCase()) {
     case 'SENT':
     case 'IN_PROGRESS':
     case 'PREPARING':
-      return { icon: '🍳', text: 'Em preparo', color: '#FF6B2B' };
+      return { text: 'Em preparo', color: '#C2410C', bg: '#FFEDD5' };
     case 'READY':
     case 'DONE':
-      return { icon: '✅', text: 'Pronto', color: '#2DC653' };
+      return { text: 'Pronto', color: '#15803D', bg: '#DCFCE7' };
+    case 'DELIVERED':
+      return { text: 'Entregue', color: '#475569', bg: '#F1F5F9' };
     case 'CANCELLED':
-      return { icon: '✖', text: 'Cancelado', color: '#E63946' };
+      return { text: 'Cancelado', color: C.danger, bg: '#FDECEC' };
     default:
-      return { icon: '⏳', text: 'Aguardando', color: '#999' };
+      return { text: 'Recebido', color: '#6B6B6B', bg: '#F1F1F1' };
   }
 }
 
-function comandaStatusLabel(status: string): { text: string; color: string } {
+function comandaStatus(status: string): { text: string; color: string; bg: string } {
   switch (status.toUpperCase()) {
     case 'OPEN':
-      return { text: 'Em aberto', color: '#2DC653' };
+    case 'PREPARING':
+      return { text: 'Em aberto', color: '#15803D', bg: '#DCFCE7' };
     case 'CLOSED':
-      return { text: 'Fechada', color: '#E63946' };
     case 'PAID':
-      return { text: 'Paga', color: '#0D1B2A' };
+      return { text: 'Fechada', color: '#475569', bg: '#F1F5F9' };
+    case 'CANCELLED':
+      return { text: 'Cancelada', color: C.danger, bg: '#FDECEC' };
     default:
-      return { text: status, color: '#666' };
+      return { text: status, color: '#6B6B6B', bg: '#F1F1F1' };
   }
+}
+
+function Chip({ text, color, bg }: { text: string; color: string; bg: string }) {
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, color, background: bg, borderRadius: RADIUS.pill, padding: '4px 10px', whiteSpace: 'nowrap' }}>
+      {text}
+    </span>
+  );
 }
 
 export default function ComandaPage() {
   const navigate = useNavigate();
+  const cart = useCart();
   const session = getSession();
   const [comanda, setComanda] = useState<Comanda | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
-  const [cartVersion, setCartVersion] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const cartItems = getCart();
-  const cartQty = cartCount(cartItems);
-
-  const bumpCart = useCallback(() => setCartVersion((v) => v + 1), []);
 
   const fetchComanda = useCallback(async () => {
     if (!session) return;
+    setRefreshing(true);
     try {
       const data = await pedidosApi.get(session.token);
       setComanda(data);
+      setUpdatedAt(new Date());
       setError('');
     } catch {
-      setError('Não foi possível atualizar o pedido.');
+      setError('Não foi possível atualizar o pedido. Vamos tentar de novo em instantes.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [session?.token]);
 
@@ -81,193 +91,55 @@ export default function ComandaPage() {
     };
   }, [fetchComanda]);
 
-  async function handleAddToExisting() {
-    if (!session) return;
-    const cart = getCart();
-    try {
-      await pedidosApi.addItems(session.token, cart);
-      clearCart();
-      bumpCart();
-      setCartDrawerOpen(false);
-      await fetchComanda();
-    } catch {
-      setError('Erro ao adicionar itens. Tente novamente.');
-    }
-  }
-
-  function handleClearSession() {
+  function handleNewOrder() {
+    if (!window.confirm('Começar um novo pedido? Você deixará de acompanhar este pedido neste aparelho.')) return;
     clearSession();
-    clearCart();
+    cart.clear();
     navigate('/');
   }
 
-  const wrapStyle: React.CSSProperties = {
-    maxWidth: 480,
-    margin: '0 auto',
-    minHeight: '100vh',
-    background: '#f4f6f8',
-    display: 'flex',
-    flexDirection: 'column',
-  };
-
-  const headerStyle: React.CSSProperties = {
-    background: '#0D1B2A',
-    padding: '20px 16px 16px',
-    position: 'sticky',
-    top: 0,
-    zIndex: 50,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  };
-
-  const logoStyle: React.CSSProperties = {
-    fontSize: 22,
-    fontWeight: 900,
-    color: '#FFD60A',
-    letterSpacing: 1,
-  };
-
-  const newOrderBtnStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.1)',
-    color: '#fff',
-    border: '1px solid rgba(255,255,255,0.2)',
-    borderRadius: 20,
-    padding: '6px 14px',
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: 'pointer',
-  };
-
-  const contentStyle: React.CSSProperties = {
-    flex: 1,
-    padding: '16px 16px 100px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  };
-
-  const infoCardStyle: React.CSSProperties = {
-    background: '#fff',
-    borderRadius: 12,
-    padding: '16px',
-    boxShadow: '0 2px 8px rgba(13,27,42,0.07)',
-  };
-
-  const infoRowStyle: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  };
-
-  const sectionTitleStyle: React.CSSProperties = {
-    fontSize: 13,
-    fontWeight: 700,
-    color: '#888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  };
-
-  const itemsCardStyle: React.CSSProperties = {
-    background: '#fff',
-    borderRadius: 12,
-    padding: '16px',
-    boxShadow: '0 2px 8px rgba(13,27,42,0.07)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 0,
-  };
-
-  const totalCardStyle: React.CSSProperties = {
-    background: '#0D1B2A',
-    borderRadius: 12,
-    padding: '16px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  };
-
-  const emptyStyle: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: 40,
-    color: '#666',
-    textAlign: 'center',
-  };
-
-  const loadingStyle: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    color: '#666',
-  };
-
-  const fabStyle: React.CSSProperties = {
-    position: 'fixed',
-    bottom: 76,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    background: '#FF6B2B',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 24,
-    padding: '14px 24px',
-    fontSize: 15,
-    fontWeight: 800,
-    cursor: 'pointer',
-    boxShadow: '0 4px 16px rgba(255,107,43,0.4)',
-    zIndex: 60,
-    whiteSpace: 'nowrap',
-    display: cartQty > 0 ? 'block' : 'none',
-  };
+  const card: React.CSSProperties = { background: C.surface, borderRadius: RADIUS.md, boxShadow: SHADOW.card, padding: 16 };
+  const activeItems = comanda?.items.filter((i) => i.status.toUpperCase() !== 'CANCELLED').length ?? 0;
 
   return (
-    <div style={wrapStyle}>
-      <div style={headerStyle}>
-        <div>
-          <div style={logoStyle}>BODOGAMI</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-            Acompanhar pedido
-          </div>
-        </div>
-        {session && (
-          <button style={newOrderBtnStyle} onClick={handleClearSession}>
-            Novo pedido
-          </button>
-        )}
-      </div>
+    <div
+      style={{
+        maxWidth: APP_MAX_WIDTH,
+        margin: '0 auto',
+        minHeight: '100vh',
+        background: PAGE_BACKGROUND,
+        fontFamily: FONT,
+        paddingBottom: BOTTOM_NAV_HEIGHT + 24,
+      }}
+    >
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'calc(14px + env(safe-area-inset-top)) 16px 10px' }}>
+        <button type="button" style={iconButton} onClick={() => navigate('/')} aria-label="Voltar ao cardápio">
+          <IconBack size={20} strokeWidth={2.2} />
+        </button>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 500, color: C.text }}>Meu pedido</h1>
+        <button
+          type="button"
+          style={{ ...iconButton, visibility: session ? 'visible' : 'hidden' }}
+          onClick={fetchComanda}
+          disabled={refreshing}
+          aria-label="Atualizar pedido"
+        >
+          <span style={{ display: 'flex', animation: refreshing ? 'bdg-spin 0.8s linear infinite' : 'none' }}>
+            <IconRefresh size={19} />
+          </span>
+        </button>
+      </header>
 
-      <div style={contentStyle}>
+      <main style={{ padding: '8px 16px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {!session && (
-          <div style={emptyStyle}>
-            <span style={{ fontSize: 48 }}>🍽️</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#0D1B2A' }}>
-              Nenhum pedido ativo
-            </span>
-            <span style={{ fontSize: 14 }}>
-              Acesse o cardápio, adicione itens e faça seu pedido.
-            </span>
+          <div style={{ ...card, textAlign: 'center', padding: '36px 20px', marginTop: 24 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }} aria-hidden="true">🍽️</div>
+            <div style={{ fontSize: 17, fontWeight: 600, color: C.text }}>Nenhum pedido em andamento</div>
+            <div style={{ fontSize: 14, color: C.textMuted, marginTop: 6 }}>Escolha seus pratos no cardápio e faça seu pedido.</div>
             <button
-              style={{
-                marginTop: 8,
-                background: '#FFD60A',
-                color: '#0D1B2A',
-                border: 'none',
-                borderRadius: 12,
-                padding: '14px 28px',
-                fontSize: 15,
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
+              type="button"
               onClick={() => navigate('/')}
+              style={{ marginTop: 20, border: 'none', borderRadius: RADIUS.pill, background: C.primary, color: '#fff', padding: '14px 28px', fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: 'pointer', boxShadow: SHADOW.button }}
             >
               Ver cardápio
             </button>
@@ -275,171 +147,146 @@ export default function ComandaPage() {
         )}
 
         {session && loading && (
-          <div style={loadingStyle}>
-            <span style={{ fontSize: 36 }}>🔄</span>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>Buscando seu pedido...</span>
+          <div role="status" style={{ textAlign: 'center', padding: 60, color: C.textMuted }}>
+            <span
+              aria-hidden="true"
+              style={{ display: 'inline-block', width: 30, height: 30, borderRadius: '50%', border: `3px solid ${C.primarySoft}`, borderTopColor: C.primary, animation: 'bdg-spin 0.8s linear infinite' }}
+            />
+            <div style={{ marginTop: 12, fontSize: 14 }}>Buscando seu pedido…</div>
           </div>
         )}
 
         {session && !loading && error && (
-          <div
-            style={{
-              margin: '0',
-              padding: 14,
-              background: '#fff0f0',
-              border: '1px solid #E63946',
-              borderRadius: 10,
-              color: '#E63946',
-              fontSize: 13,
-              fontWeight: 600,
-              textAlign: 'center',
-            }}
-          >
+          <div role="alert" style={{ background: '#FDECEC', color: C.danger, borderRadius: 12, padding: '12px 14px', fontSize: 13 }}>
             {error}
           </div>
         )}
 
         {session && !loading && comanda && (
           <>
-            {/* Info card */}
-            <div style={infoCardStyle}>
-              <div style={{ ...infoRowStyle, marginBottom: 10 }}>
-                <span style={{ fontSize: 16, fontWeight: 800, color: '#0D1B2A' }}>
-                  Olá, {comanda.customerName}!
-                </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    padding: '4px 10px',
-                    borderRadius: 20,
-                    background: `${comandaStatusLabel(comanda.status).color}20`,
-                    color: comandaStatusLabel(comanda.status).color,
-                  }}
-                >
-                  {comandaStatusLabel(comanda.status).text}
+            {/* Saudação + mesa */}
+            <section
+              style={{
+                borderRadius: RADIUS.lg,
+                padding: '20px 18px',
+                color: '#fff',
+                background: `linear-gradient(135deg, ${C.primary} 0%, #FF9A6C 100%)`,
+                boxShadow: SHADOW.button,
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{ position: 'absolute', right: -30, bottom: -40, width: 150, height: 150, borderRadius: '50%', background: 'rgba(255,255,255,0.14)' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 13, opacity: 0.9 }}>Olá,</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.2 }}>{comanda.customerName}! 👋</div>
+                </div>
+                <span style={{ background: 'rgba(255,255,255,0.22)', borderRadius: RADIUS.pill, padding: '5px 12px', fontSize: 12, fontWeight: 600 }}>
+                  {comandaStatus(comanda.status).text}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 16 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 11, color: '#aaa', fontWeight: 600 }}>MESA</span>
-                  <span style={{ fontSize: 20, fontWeight: 900, color: '#0D1B2A' }}>
-                    {comanda.tableNumber}
-                  </span>
+              <div style={{ display: 'flex', gap: 28, marginTop: 18, position: 'relative' }}>
+                <div>
+                  <div style={{ fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 0.6 }}>Mesa</div>
+                  <div style={{ fontSize: 20, fontWeight: 600 }}>{tableDisplay(comanda.tableNumber).replace(/^Mesa\s+/i, '') || '—'}</div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 11, color: '#aaa', fontWeight: 600 }}>ITENS</span>
-                  <span style={{ fontSize: 20, fontWeight: 900, color: '#0D1B2A' }}>
-                    {comanda.items.length}
-                  </span>
+                <div>
+                  <div style={{ fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 0.6 }}>Itens</div>
+                  <div style={{ fontSize: 20, fontWeight: 600 }}>{activeItems}</div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            {/* Items list */}
-            <div style={itemsCardStyle}>
-              <div style={sectionTitleStyle}>Itens do pedido</div>
-              {comanda.items.map((item, idx) => {
-                const s = statusLabel(item.status);
-                const cancelled = item.status.toUpperCase() === 'CANCELLED';
-                return (
-                  <div
-                    key={item.id ?? idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 0',
-                      borderBottom:
-                        idx < comanda.items.length - 1 ? '1px solid #f4f4f4' : 'none',
-                      opacity: cancelled ? 0.5 : 1,
-                    }}
-                  >
-                    <div
+            {/* Itens com status de preparo */}
+            <section style={card} aria-label="Itens do pedido">
+              <h2 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600, color: C.text }}>Itens do pedido</h2>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {comanda.items.map((item, idx) => {
+                  const s = itemStatus(item.status);
+                  const cancelled = item.status.toUpperCase() === 'CANCELLED';
+                  return (
+                    <li
+                      key={item.id ?? idx}
                       style={{
                         display: 'flex',
-                        flexDirection: 'column',
-                        gap: 3,
-                        flex: 1,
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '12px 0',
+                        borderBottom: idx < comanda.items.length - 1 ? `1px solid ${C.border}` : 'none',
+                        opacity: cancelled ? 0.55 : 1,
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: '#0D1B2A',
-                          textDecoration: cancelled ? 'line-through' : 'none',
-                        }}
-                      >
-                        {item.quantity}x {item.name}
-                      </span>
-                      {item.notes && (
-                        <span style={{ fontSize: 11, color: '#999' }}>Obs: {item.notes}</span>
-                      )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ fontSize: 13 }}>{s.icon}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: s.color }}>
-                          {s.text}
-                        </span>
+                      <FoodImage alt={item.name} size={46} shadow={false} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, textDecoration: cancelled ? 'line-through' : 'none' }}>
+                          {item.quantity}× {item.name}
+                        </div>
+                        {item.notes && (
+                          <div
+                            title={item.notes}
+                            style={{ fontSize: 12, color: C.textMuted, marginTop: 2, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                          >
+                            {item.notes}
+                          </div>
+                        )}
+                        <div style={{ marginTop: 6 }}><Chip {...s} /></div>
                       </div>
-                    </div>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#0D1B2A' }}>
-                      {formatPrice(item.unitPrice * item.quantity)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>
+                        {formatPrice(item.unitPrice * item.quantity)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
 
-            {/* Total */}
-            <div style={totalCardStyle}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Total</span>
-              <span style={{ fontSize: 22, fontWeight: 900, color: '#FFD60A' }}>
-                {formatPrice(comanda.total)}
-              </span>
-            </div>
+            <section style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 15, color: C.textMuted }}>Total</span>
+              <span style={{ fontSize: 22, fontWeight: 600, color: C.primary }}>{formatPrice(comanda.total)}</span>
+            </section>
 
-            {/* Add more button */}
             <button
-              style={{
-                background: 'transparent',
-                color: '#FF6B2B',
-                border: '2px solid #FF6B2B',
-                borderRadius: 12,
-                padding: '14px 0',
-                fontSize: 15,
-                fontWeight: 800,
-                cursor: 'pointer',
-                width: '100%',
-              }}
+              type="button"
               onClick={() => navigate('/')}
+              style={{
+                height: 54,
+                border: 'none',
+                borderRadius: RADIUS.pill,
+                background: C.surface,
+                color: C.primary,
+                boxShadow: SHADOW.card,
+                fontFamily: FONT,
+                fontSize: 15,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                cursor: 'pointer',
+              }}
             >
-              + Pedir mais itens
+              <IconPlus size={18} strokeWidth={2.4} /> Pedir mais itens
             </button>
 
-            <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center' }}>
-              Atualizado automaticamente a cada 15 segundos
+            <div style={{ textAlign: 'center', fontSize: 12, color: C.textMuted }}>
+              Atualiza sozinho a cada 15 segundos
+              {updatedAt && ` · última às ${updatedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
             </div>
+
+            <button
+              type="button"
+              onClick={handleNewOrder}
+              style={{ alignSelf: 'center', border: 'none', background: 'none', fontFamily: FONT, fontSize: 13, color: C.textMuted, textDecoration: 'underline', cursor: 'pointer', padding: 8 }}
+            >
+              Começar um novo pedido
+            </button>
           </>
         )}
-      </div>
-
-      <button
-        style={fabStyle}
-        onClick={() => setCartDrawerOpen(true)}
-        aria-label="Ver carrinho"
-      >
-        Adicionar ao pedido ({cartQty})
-      </button>
-
-      <CartDrawer
-        open={cartDrawerOpen}
-        onClose={() => setCartDrawerOpen(false)}
-        onOrder={() => {}}
-        onAddToExisting={handleAddToExisting}
-        cartVersion={cartVersion}
-        onCartChange={bumpCart}
-      />
+      </main>
     </div>
   );
 }

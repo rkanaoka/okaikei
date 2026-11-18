@@ -24,3 +24,6 @@ cardápio, mesas, comandas, caixa, pagamentos, vouchers, impressão e motivos.
 - PrismaModule (global) — banco de dados
 - RedisModule (global) — cache
 - NatsModule (global) — mensageria
+
+## Quem depende do PDV
+- `modules/fiscal` (opcional) escuta `comanda.closed` e usa `PrintingService.printBuffer`. O PDV **não** importa o fiscal.

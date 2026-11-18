@@ -44,6 +44,8 @@ export interface CartItem {
   quantity: number;
   notes?: string;
   selectedOptionIds?: string[];
+  // Só para exibição no carrinho (miniatura) — não é enviado à API.
+  imageUrl?: string;
 }
 
 export interface Session {

@@ -8,4 +8,5 @@ export const PERMISSION_GROUPS: { key: string; label: string }[] = [
   { key: 'relatorios',      label: 'Relatórios' },
   { key: 'estoque',         label: 'Estoque' },
   { key: 'configuracoes',   label: 'Configurações' },
+  { key: 'fiscal',          label: 'Fiscal (NFC-e)' },
 ];

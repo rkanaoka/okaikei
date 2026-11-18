@@ -24,8 +24,10 @@ function genId(): string {
 // seleções de opções diferentes viram linhas distintas no carrinho.
 export function addToCart(item: Omit<CartItem, 'id'>): void {
   const cart = getCart();
+  const sameOptions = (c: CartItem) =>
+    [...(c.selectedOptionIds ?? [])].sort().join(',') === [...(item.selectedOptionIds ?? [])].sort().join(',');
   const existing = cart.find(
-    (c) => c.menuItemId === item.menuItemId && (c.notes || '') === (item.notes || '')
+    (c) => c.menuItemId === item.menuItemId && (c.notes || '') === (item.notes || '') && sameOptions(c)
   );
   if (existing) {
     existing.quantity += item.quantity;

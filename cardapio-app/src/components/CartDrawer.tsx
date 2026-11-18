@@ -1,308 +1,245 @@
-import React, { useState, useEffect } from 'react';
-import type { CartItem } from '../lib/types';
-import { getCart, setCart, removeFromCart, updateQty, cartTotal, cartCount } from '../lib/cart';
-import { getSession } from '../lib/session';
+import React, { useEffect, useState } from 'react';
+import { useCart } from '../lib/CartContext';
+import { getSession, tableDisplay } from '../lib/session';
+import { APP_MAX_WIDTH, C, FONT, RADIUS, SHADOW, formatPrice } from '../theme';
 import QuantityControl from './QuantityControl';
-
-function formatPrice(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+import FoodImage from './FoodImage';
+import { IconBag, IconClose, IconTrash } from './Icons';
 
 interface Props {
-  open: boolean;
-  onClose: () => void;
+  /** Sem comanda aberta: segue para a identificação (nome + mesa). */
   onOrder: () => void;
-  onAddToExisting: () => void;
-  cartVersion: number;
-  onCartChange: () => void;
+  /** Com comanda aberta: envia os itens direto para ela. */
+  onAddToExisting: () => Promise<void>;
 }
 
-export default function CartDrawer({
-  open,
-  onClose,
-  onOrder,
-  onAddToExisting,
-  cartVersion,
-  onCartChange,
-}: Props) {
-  const [cart, setCartState] = useState<CartItem[]>([]);
+export default function CartDrawer({ onOrder, onAddToExisting }: Props) {
+  const cart = useCart();
   const session = getSession();
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [editingNote, setEditingNote] = useState<string | null>(null);
 
   useEffect(() => {
-    setCartState(getCart());
-  }, [open, cartVersion]);
+    if (!cart.isOpen) { setError(''); setEditingNote(null); }
+  }, [cart.isOpen]);
 
-  function handleRemove(id: string) {
-    removeFromCart(id);
-    const updated = getCart();
-    setCartState(updated);
-    onCartChange();
+  // Fecha com Esc e trava a rolagem do fundo
+  useEffect(() => {
+    if (!cart.isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape' && !sending) cart.close(); }
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [cart.isOpen, sending]);
+
+  if (!cart.isOpen) return null;
+
+  async function handlePrimary() {
+    if (cart.count === 0 || sending) return;
+    if (!session) { onOrder(); return; }
+    setSending(true);
+    setError('');
+    try {
+      await onAddToExisting();
+    } catch {
+      setError('Não foi possível enviar os itens. Tente novamente.');
+    } finally {
+      setSending(false);
+    }
   }
-
-  function handleQty(id: string, qty: number) {
-    updateQty(id, qty);
-    const updated = getCart();
-    setCartState(updated);
-    onCartChange();
-  }
-
-  function handleNoteChange(id: string, note: string) {
-    const updated = cart.map((c) => (c.id === id ? { ...c, notes: note } : c));
-    setCartState(updated);
-    setCart(updated);
-  }
-
-  if (!open) return null;
-
-  const total = cartTotal(cart);
-  const count = cartCount(cart);
-
-  const overlayStyle: React.CSSProperties = {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(13,27,42,0.5)',
-    zIndex: 100,
-    display: 'flex',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  };
-
-  const drawerStyle: React.CSSProperties = {
-    background: '#fff',
-    borderRadius: '20px 20px 0 0',
-    width: '100%',
-    maxWidth: 480,
-    maxHeight: '90vh',
-    display: 'flex',
-    flexDirection: 'column',
-  };
-
-  const headerStyle: React.CSSProperties = {
-    padding: '16px 20px 12px',
-    borderBottom: '1px solid #f0f0f0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexShrink: 0,
-  };
-
-  const titleStyle: React.CSSProperties = {
-    fontSize: 18,
-    fontWeight: 800,
-    color: '#0D1B2A',
-  };
-
-  const closeBtnStyle: React.CSSProperties = {
-    background: '#f0f0f0',
-    border: 'none',
-    borderRadius: '50%',
-    width: 32,
-    height: 32,
-    fontSize: 18,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#0D1B2A',
-  };
-
-  const listStyle: React.CSSProperties = {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '12px 20px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  };
-
-  const itemRowStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    padding: '12px 0',
-    borderBottom: '1px solid #f4f4f4',
-  };
-
-  const itemTopStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  };
-
-  const itemNameStyle: React.CSSProperties = {
-    fontSize: 14,
-    fontWeight: 700,
-    color: '#0D1B2A',
-    flex: 1,
-  };
-
-  const itemPriceStyle: React.CSSProperties = {
-    fontSize: 14,
-    fontWeight: 700,
-    color: '#FF6B2B',
-    whiteSpace: 'nowrap',
-  };
-
-  const removeBtnStyle: React.CSSProperties = {
-    background: 'transparent',
-    border: 'none',
-    color: '#E63946',
-    fontSize: 18,
-    cursor: 'pointer',
-    padding: '0 4px',
-    lineHeight: 1,
-  };
-
-  const noteInputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '6px 10px',
-    fontSize: 12,
-    border: '1px solid #e0e0e0',
-    borderRadius: 8,
-    color: '#555',
-    background: '#fafafa',
-    outline: 'none',
-    resize: 'none',
-  };
-
-  const footerStyle: React.CSSProperties = {
-    padding: '12px 20px 28px',
-    borderTop: '1px solid #f0f0f0',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-    flexShrink: 0,
-  };
-
-  const totalRowStyle: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  };
-
-  const totalLabelStyle: React.CSSProperties = {
-    fontSize: 16,
-    fontWeight: 700,
-    color: '#0D1B2A',
-  };
-
-  const totalValueStyle: React.CSSProperties = {
-    fontSize: 20,
-    fontWeight: 900,
-    color: '#0D1B2A',
-  };
-
-  const primaryBtnStyle: React.CSSProperties = {
-    background: '#FFD60A',
-    color: '#0D1B2A',
-    border: 'none',
-    borderRadius: 12,
-    padding: '15px 0',
-    fontSize: 15,
-    fontWeight: 800,
-    cursor: count > 0 ? 'pointer' : 'not-allowed',
-    opacity: count > 0 ? 1 : 0.5,
-    width: '100%',
-  };
-
-  const emptyStyle: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 40,
-    color: '#999',
-  };
 
   return (
-    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={drawerStyle}>
-        <div style={headerStyle}>
-          <span style={titleStyle}>Carrinho</span>
-          <button style={closeBtnStyle} onClick={onClose} aria-label="Fechar carrinho">
-            ×
-          </button>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Carrinho"
+      onClick={(e) => e.target === e.currentTarget && !sending && cart.close()}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(31,31,31,0.45)',
+        zIndex: 120,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        fontFamily: FONT,
+        animation: 'bdg-fade 0.18s ease-out',
+      }}
+    >
+      <div
+        style={{
+          background: C.bg,
+          borderRadius: '26px 26px 0 0',
+          width: '100%',
+          maxWidth: APP_MAX_WIDTH,
+          maxHeight: '88vh',
+          display: 'flex',
+          flexDirection: 'column',
+          animation: 'bdg-slide-up 0.22s ease-out',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10 }} aria-hidden="true">
+          <span style={{ width: 44, height: 5, borderRadius: 3, background: '#DADADA' }} />
         </div>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 12px' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: C.text }}>Seu carrinho</h2>
+            {cart.count > 0 && (
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                {cart.count} {cart.count === 1 ? 'item' : 'itens'}
+                {session ? ` · vai para a comanda${session.tableNumber ? ` da ${tableDisplay(session.tableNumber)}` : ''}` : ''}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={cart.close}
+            disabled={sending}
+            aria-label="Fechar carrinho"
+            style={{ width: 38, height: 38, borderRadius: 12, border: 'none', background: C.surface, boxShadow: SHADOW.card, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.text }}
+          >
+            <IconClose size={18} strokeWidth={2.2} />
+          </button>
+        </header>
 
-        {cart.length === 0 ? (
-          <div style={emptyStyle}>
-            <span style={{ fontSize: 48 }}>🛒</span>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>Carrinho vazio</span>
-            <span style={{ fontSize: 13 }}>Adicione itens do cardápio</span>
+        {cart.items.length === 0 ? (
+          <div style={{ padding: '36px 20px 48px', textAlign: 'center', color: C.textMuted }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }} aria-hidden="true">🛒</div>
+            <div style={{ fontSize: 16, fontWeight: 500, color: C.text }}>Seu carrinho está vazio</div>
+            <div style={{ fontSize: 13, marginTop: 4 }}>Toque no + dos pratos para adicionar.</div>
+            <button
+              type="button"
+              onClick={cart.close}
+              style={{ marginTop: 20, border: 'none', borderRadius: RADIUS.pill, background: C.primary, color: '#fff', padding: '12px 26px', fontFamily: FONT, fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: SHADOW.button }}
+            >
+              Ver cardápio
+            </button>
           </div>
         ) : (
-          <div style={listStyle}>
-            {cart.map((item) => (
-              <div key={item.id} style={itemRowStyle}>
-                <div style={itemTopStyle}>
-                  <span style={itemNameStyle}>{item.name}</span>
-                  <span style={itemPriceStyle}>
-                    {formatPrice(item.price * item.quantity)}
-                  </span>
-                  <button
-                    style={removeBtnStyle}
-                    onClick={() => handleRemove(item.id)}
-                    aria-label={`Remover ${item.name}`}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <QuantityControl
-                    quantity={item.quantity}
-                    onDecrease={() => handleQty(item.id, item.quantity - 1)}
-                    onIncrease={() => handleQty(item.id, item.quantity + 1)}
-                    min={1}
-                  />
-                  <span style={{ fontSize: 12, color: '#aaa' }}>
-                    {formatPrice(item.price)} / un
-                  </span>
-                </div>
-                <textarea
-                  style={noteInputStyle}
-                  placeholder="Observação (opcional)"
-                  rows={1}
-                  value={item.notes ?? ''}
-                  onChange={(e) => handleNoteChange(item.id, e.target.value)}
-                />
+          <>
+            <ul style={{ listStyle: 'none', margin: 0, flex: 1, overflowY: 'auto', padding: '4px 16px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {cart.items.map((item) => (
+                <li key={item.id} style={{ background: C.surface, borderRadius: RADIUS.md, boxShadow: SHADOW.card, padding: 12 }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <FoodImage src={item.imageUrl} alt={item.name} size={58} shadow={false} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{item.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => cart.remove(item.id)}
+                          aria-label={`Remover ${item.name}`}
+                          style={{ border: 'none', background: 'none', padding: 2, color: '#B5B5B5', cursor: 'pointer', flexShrink: 0, height: 24 }}
+                        >
+                          <IconTrash size={18} />
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 }}>
+                        <span style={{ fontSize: 15, fontWeight: 600, color: C.primary }}>
+                          {formatPrice(item.price * item.quantity)}
+                        </span>
+                        <QuantityControl
+                          size="sm"
+                          quantity={item.quantity}
+                          label={item.name}
+                          onDecrease={() => cart.updateQty(item.id, item.quantity - 1)}
+                          onIncrease={() => cart.updateQty(item.id, item.quantity + 1)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {editingNote === item.id ? (
+                    <textarea
+                      autoFocus
+                      rows={2}
+                      maxLength={200}
+                      value={item.notes ?? ''}
+                      placeholder="Ex.: sem cebolinha, molho à parte…"
+                      onChange={(e) => cart.setNotes(item.id, e.target.value)}
+                      onBlur={() => setEditingNote(null)}
+                      aria-label={`Observação para ${item.name}`}
+                      style={{
+                        width: '100%',
+                        marginTop: 10,
+                        padding: '10px 12px',
+                        fontFamily: FONT,
+                        fontSize: 16,
+                        border: `1.5px solid ${C.primary}`,
+                        borderRadius: 12,
+                        outline: 'none',
+                        resize: 'none',
+                        color: C.text,
+                        background: '#FFFBF9',
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setEditingNote(item.id)}
+                      style={{
+                        marginTop: 10,
+                        width: '100%',
+                        textAlign: 'left',
+                        border: 'none',
+                        borderTop: `1px dashed ${C.border}`,
+                        background: 'none',
+                        padding: '8px 0 0',
+                        fontFamily: FONT,
+                        fontSize: 12,
+                        color: item.notes ? C.text : C.primary,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {item.notes ? `📝 ${item.notes}` : '+ Adicionar observação'}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <footer style={{ padding: '14px 20px calc(18px + env(safe-area-inset-bottom))', background: C.surface, borderRadius: '22px 22px 0 0', boxShadow: SHADOW.floating }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+                <span style={{ fontSize: 15, color: C.textMuted }}>Total</span>
+                <span style={{ fontSize: 22, fontWeight: 600, color: C.text }}>{formatPrice(cart.total)}</span>
               </div>
-            ))}
-          </div>
+              {error && (
+                <div role="alert" style={{ background: '#FDECEC', color: C.danger, borderRadius: 12, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+                  {error}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handlePrimary}
+                disabled={sending}
+                style={{
+                  width: '100%',
+                  height: 56,
+                  border: 'none',
+                  borderRadius: RADIUS.pill,
+                  background: sending ? '#FFB49C' : C.primary,
+                  color: '#fff',
+                  boxShadow: SHADOW.button,
+                  fontFamily: FONT,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  cursor: sending ? 'wait' : 'pointer',
+                }}
+              >
+                <IconBag size={20} strokeWidth={2} />
+                {sending ? 'Enviando…' : session ? 'Enviar para minha comanda' : 'Fazer pedido'}
+              </button>
+            </footer>
+          </>
         )}
-
-        <div style={footerStyle}>
-          <div style={totalRowStyle}>
-            <span style={totalLabelStyle}>Total</span>
-            <span style={totalValueStyle}>{formatPrice(total)}</span>
-          </div>
-
-          {session ? (
-            <button
-              style={{ ...primaryBtnStyle, background: '#FF6B2B', color: '#fff' }}
-              disabled={count === 0}
-              onClick={count > 0 ? onAddToExisting : undefined}
-            >
-              Adicionar ao pedido ({count} {count === 1 ? 'item' : 'itens'})
-            </button>
-          ) : (
-            <button
-              style={primaryBtnStyle}
-              disabled={count === 0}
-              onClick={count > 0 ? onOrder : undefined}
-            >
-              Fazer pedido → ({count} {count === 1 ? 'item' : 'itens'})
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );

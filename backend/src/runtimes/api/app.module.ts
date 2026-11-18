@@ -13,6 +13,7 @@ import { ConfigsModule }         from '@/modules/config/config.module';
 import { ControleEstoqueModule } from '@/modules/controle-estoque/controle-estoque.module';
 import { CardapioDigitalModule } from '@/modules/cardapio-digital/cardapio-digital.module';
 import { AuthModule }            from '@/modules/auth/auth.module';
+import { FiscalModule }          from '@/modules/fiscal/fiscal.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AuthModule }            from '@/modules/auth/auth.module';
     ConfigsModule,
     ControleEstoqueModule,
     CardapioDigitalModule,
+    FiscalModule, // opcional: NFC-e via Focus NFe; só atua com fiscal_enabled ligado
   ],
 })
 export class AppModule {}

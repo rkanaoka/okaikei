@@ -28,6 +28,10 @@ import CategoriasInsumo     from './admin/CategoriasInsumo';
 import Fornecedores         from './admin/Fornecedores';
 import Garcons              from './admin/Garcons';
 import MesasComandas        from './admin/MesasComandas';
+import FiscalConfig         from './admin/FiscalConfig';
+import FiscalModelos        from './admin/FiscalModelos';
+import FiscalItens          from './admin/FiscalItens';
+import FiscalNotas          from './admin/FiscalNotas';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SectionId =
@@ -37,7 +41,8 @@ type SectionId =
   | 'rel-clientes'   | 'rel-cupons' | 'rel-parcerias'
   | 'rel-itens'      | 'rel-faturamento' | 'rel-pedidos' | 'rel-tempo' | 'rel-faturamento-notion' | 'rel-extrato-notion'
   | 'estoque-itens' | 'estoque-categorias' | 'estoque-fornecedores' | 'estoque-etiquetas' | 'estoque-codigo-barras'
-  | 'config-loja'    | 'config-horarios' | 'config-fiscal'
+  | 'fiscal-config' | 'fiscal-modelos' | 'fiscal-itens' | 'fiscal-notas'
+  | 'config-loja'    | 'config-horarios'
   | 'config-cancelamento' | 'config-desconto' | 'config-impressao' | 'config-usuarios' | 'config-garcons' | 'config-mesas';
 
 // Chave de permissão de cada entrada de topo — ver frontend/src/pages/admin/permissions.ts
@@ -75,10 +80,15 @@ const NAV: Array<
     { id:'estoque-etiquetas',    label:'Gerar Etiquetas de Validade' },
     { id:'estoque-codigo-barras', label:'Gerar Código de Barras' },
   ]},
+  { type:'group', label:'Fiscal', icon:'🧾', permission:'fiscal', items:[
+    { id:'fiscal-config', label:'Configuração (NFC-e)' },
+    { id:'fiscal-modelos', label:'Dados fiscais' },
+    { id:'fiscal-itens',  label:'Classificação dos produtos' },
+    { id:'fiscal-notas',  label:'Notas emitidas' },
+  ]},
   { type:'group', label:'Configurações', icon:'⚙️', permission:'configuracoes', items:[
     { id:'config-loja',          label:'Dados da loja' },
     { id:'config-horarios',      label:'Horários de funcionamento' },
-    { id:'config-fiscal',        label:'Dados fiscais' },
     { id:'config-cancelamento',  label:'Motivos de cancelamento' },
     { id:'config-desconto',      label:'Motivos de desconto' },
     { id:'config-impressao',     label:'Modelos de impressão' },
@@ -143,7 +153,10 @@ function renderSection(id: SectionId) {
     case 'estoque-codigo-barras': return <GerarCodigoBarras />;
     case 'config-loja':         return <ConfigLoja />;
     case 'config-horarios':     return <EmptyPlaceholder icon="🕐" title="Horários de Funcionamento" subtitle="Módulo em desenvolvimento" />;
-    case 'config-fiscal':       return <EmptyPlaceholder icon="📄" title="Dados Fiscais" subtitle="Módulo em desenvolvimento" />;
+    case 'fiscal-config':       return <FiscalConfig />;
+    case 'fiscal-modelos':      return <FiscalModelos />;
+    case 'fiscal-itens':        return <FiscalItens />;
+    case 'fiscal-notas':        return <FiscalNotas />;
     case 'config-cancelamento': return <MotivosCancelamento />;
     case 'config-desconto':     return <MotivosDesconto />;
     case 'config-impressao':    return <ModelosImpressao />;
@@ -182,7 +195,7 @@ function AdminShell() {
   const [section, setSection]     = useState<SectionId>(() => firstSection(nav));
   const [openGroups, setOpenGroups] = useState<Record<string,boolean>>({
     'Cardápio': false, 'Financeiro': false, 'Relacionamentos': false,
-    'Relatórios': false, 'Estoque': false, 'Configurações': false,
+    'Relatórios': false, 'Estoque': false, 'Fiscal': false, 'Configurações': false,
   });
 
   function toggle(label: string) {

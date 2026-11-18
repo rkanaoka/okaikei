@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { comandasApi, reasonsApi, menuApi, tablesApi, vouchersApi, garconsApi, partnershipsApi } from '@/services/api';
 import CurrencyInput from '@/components/CurrencyInput';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
+import FiscalNfcePanel from '@/components/FiscalNfcePanel';
 
 const BRAND = { navy:'#0D1B2A', yellow:'#FFD60A', orange:'#FF6B2B', red:'#E63946', green:'#2DC653', navyLight:'#1A2E44', cream:'#FFF8F0' };
 const fmtBRL = (v:any) => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
@@ -944,6 +945,8 @@ export default function Caixa() {
               ))}
             </div>
           )}
+
+          {comanda?.status === 'CLOSED' && <FiscalNfcePanel comandaId={comanda.id} />}
         </div>
 
         {/* Actions */}

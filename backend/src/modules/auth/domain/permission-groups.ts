@@ -1,5 +1,5 @@
 export const PERMISSION_GROUPS = [
-  'dashboard', 'cardapio', 'financeiro', 'relacionamentos', 'relatorios', 'estoque', 'configuracoes',
+  'dashboard', 'cardapio', 'financeiro', 'relacionamentos', 'relatorios', 'estoque', 'configuracoes', 'fiscal',
 ] as const;
 
 export type PermissionGroup = typeof PERMISSION_GROUPS[number];
