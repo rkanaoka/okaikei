@@ -122,7 +122,7 @@ export class FiscalController {
   // ── Documentos (NFC-e) ───────────────────────────────────────────────────
   @Get('documents')
   @FiscalAdmin()
-  list(@Query() q: { status?: string; comandaId?: string; from?: string; to?: string; limit?: string }) {
+  list(@Query() q: { status?: string; comandaId?: string; from?: string; to?: string; numero?: string; destinatario?: string; limit?: string }) {
     return this.nfce.list({ ...q, limit: q.limit ? Number(q.limit) : undefined });
   }
 

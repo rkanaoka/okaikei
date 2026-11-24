@@ -64,7 +64,9 @@ export interface FiscalRepositoryPort {
   findDocumentsByComanda(comandaId: string): Promise<FiscalDocumentRecord[]>; // mais recente primeiro
   /** Documentos não finalizados (PENDENTE/PROCESSANDO/ERRO_COMUNICACAO) atualizados antes de `before`. */
   findUnsettledDocuments(before: Date, limit: number): Promise<FiscalDocumentRecord[]>;
-  listDocuments(filter: { status?: string; comandaId?: string; from?: Date; to?: Date; limit?: number }): Promise<FiscalDocumentRecord[]>;
+  listDocuments(filter: { status?: string; comandaId?: string; from?: Date; to?: Date; numero?: string; destinatario?: string; limit?: number }): Promise<FiscalDocumentRecord[]>;
+  /** Resumo das comandas das notas (número, mesa, cliente) — para o link "Pedido" na listagem. */
+  findComandaSummaries(ids: string[]): Promise<Array<{ id: string; number: number; tableLabel: string | null; customerName: string | null; openedAt: Date; closedAt: Date | null }>>;
 
   // ── Auditoria ────────────────────────────────────────────────────────────
   addAudit(data: {

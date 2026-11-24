@@ -19,6 +19,7 @@ import { PAYMENT_METHOD_REPOSITORY_PORT } from './domain/repositories/payment-me
 // Application — Contracts (tokens)
 import { COMANDA_EVENT_PUBLISHER_PORT }   from './application/contracts/comanda-event-publisher.port';
 import { ESC_POS_CLIENT_PORT }            from './application/contracts/esc-pos-client.port';
+import { IMAGE_PROCESSOR_PORT }           from './application/contracts/image-processor.port';
 
 // Application — Use Cases (Services)
 import { MenuService }           from './application/use-cases/menu.service';
@@ -51,6 +52,7 @@ import { PrismaPaymentMethodRepository } from './infrastructure/repositories/pri
 // Infrastructure — Publishers & API Clients
 import { NatsComandaPublisher } from './infrastructure/publishers/nats-comanda.publisher';
 import { TcpEscPosClient }      from './infrastructure/api-clients/tcp-esc-pos.client';
+import { SharpImageProcessor }  from './infrastructure/api-clients/sharp-image.processor';
 
 // Controllers
 import { MenuController }          from '@/runtimes/api/controllers/menu.controller';
@@ -114,6 +116,7 @@ import { PaymentMethodsController } from '@/runtimes/api/controllers/payment-met
     // Publisher and API Client Port → Adapter bindings
     { provide: COMANDA_EVENT_PUBLISHER_PORT,   useClass: NatsComandaPublisher },
     { provide: ESC_POS_CLIENT_PORT,            useClass: TcpEscPosClient },
+    { provide: IMAGE_PROCESSOR_PORT,           useClass: SharpImageProcessor },
   ],
   exports: [
     MenuService,

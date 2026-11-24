@@ -4,6 +4,7 @@ import { BRAND, fmtBRL, PRINT_CAT_LABELS, Card, PageHeader, Btn, TableHead } fro
 import CardapioOpcoes from './CardapioOpcoes';
 import OptionGroupEditModal from './OptionGroupEditModal';
 import CurrencyInput from '@/components/CurrencyInput';
+import ImageCropper from '@/components/ImageCropper';
 
 const DAYS = [
   { v: 0, l: 'Dom' }, { v: 1, l: 'Seg' }, { v: 2, l: 'Ter' }, { v: 3, l: 'Qua' },
@@ -23,6 +24,8 @@ export default function Cardapio() {
   const [catFilter, setCat]         = useState('all');
   const [saving, setSaving]         = useState(false);
   const [err, setErr]               = useState('');
+  const [cropFile, setCropFile]     = useState<File | null>(null);   // foto aberta no editor
+  const [photoInfo, setPhotoInfo]   = useState('');                  // "13,2 MB → 96 KB"
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,12 +43,14 @@ export default function Cardapio() {
     : items.filter(i => i.categoryId === catFilter);
 
   function openNew() {
+    setPhotoInfo('');
     setForm({ name:'', categoryId:'', printCategories:[], price:'', description:'', available:true,
       imageUrl:'', chargeServiceFee:true, availabilitySchedule:null, optionGroupIds:[] });
     setTab('geral');
   }
 
   function openEdit(item: any) {
+    setPhotoInfo('');
     const linkedIds = new Set(groups.filter(g => g.menuItems.some((m:any) => m.id === item.id)).map(g => g.id));
     const order: string[] = (Array.isArray(item.optionGroupOrder) ? item.optionGroupOrder : []).filter((id:string) => linkedIds.has(id));
     const missing = [...linkedIds].filter(id => !order.includes(id));
@@ -92,13 +97,32 @@ export default function Cardapio() {
     });
   }
 
+  // A foto passa pelo editor (enquadramento + otimização) antes de entrar no formulário —
+  // fotos de celular cruas passam de 10 MB e o servidor recusa requisições acima de 1 MB.
   function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setForm((f:any) => ({ ...f, imageUrl: reader.result as string }));
-    reader.readAsDataURL(file);
     e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/') && !/\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(file.name)) {
+      setErr('Escolha um arquivo de imagem (JPG, PNG ou WebP).');
+      return;
+    }
+    setErr('');
+    setCropFile(file);
+  }
+
+  /** Reabre a foto atual no editor para reenquadrar. */
+  async function adjustCurrentPhoto() {
+    try {
+      const blob = await (await fetch(form.imageUrl)).blob();
+      setCropFile(new File([blob], 'foto-atual', { type: blob.type || 'image/jpeg' }));
+    } catch {
+      setErr('Não foi possível abrir a foto atual para ajuste. Envie a foto novamente.');
+    }
+  }
+
+  function fmtSize(n: number) {
+    return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
   }
 
   function toggleDay(day: number) {
@@ -153,8 +177,23 @@ export default function Cardapio() {
     });
   }
 
+  const cropper = cropFile && (
+    <ImageCropper
+      file={cropFile}
+      onCancel={() => setCropFile(null)}
+      onConfirm={(dataUrl, info) => {
+        setForm((f: any) => ({ ...f, imageUrl: dataUrl }));
+        setPhotoInfo(info.originalBytes > info.finalBytes
+          ? `${fmtSize(info.originalBytes)} → ${fmtSize(info.finalBytes)}`
+          : fmtSize(info.finalBytes));
+        setCropFile(null);
+      }}
+    />
+  );
+
   return (
     <div>
+      {cropper}
       <PageHeader
         title="Cardápio"
         subtitle={section === 'itens' ? `${items.length} itens cadastrados` : 'Grupos de opções para personalizar itens'}
@@ -243,7 +282,7 @@ export default function Cardapio() {
                 <div style={{ marginBottom:14 }}>
                   <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#666', marginBottom:5 }}>Foto do produto</label>
                   <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-                    <div style={{ width:64, height:64, borderRadius:8, overflow:'hidden', background:'#f4f6f8',
+                    <div style={{ width:88, height:88, borderRadius:8, overflow:'hidden', background:'#f4f6f8',
                       border:'1.5px solid #dde', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                       {form.imageUrl
                         ? <img src={form.imageUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
@@ -251,12 +290,21 @@ export default function Cardapio() {
                     </div>
                     <div>
                       <input type="file" accept="image/*" onChange={onPhotoChange} style={{ fontSize:12 }} />
-                      <p style={{ margin:'6px 0 0', fontSize:11, color:'#aaa' }}>Dimensão sugerida: 700x700px</p>
+                      <p style={{ margin:'6px 0 0', fontSize:11, color:'#aaa' }}>
+                        Qualquer foto serve: você ajusta o enquadramento e ela é otimizada automaticamente.
+                      </p>
+                      {photoInfo && <p style={{ margin:'4px 0 0', fontSize:11, color:BRAND.green, fontWeight:700 }}>✓ Foto otimizada: {photoInfo}</p>}
                       {form.imageUrl && (
-                        <button type="button" onClick={() => setForm({...form, imageUrl:''})}
-                          style={{ marginTop:4, fontSize:11, color:BRAND.red, background:'none', border:'none', cursor:'pointer', padding:0 }}>
-                          Remover foto
-                        </button>
+                        <div style={{ display:'flex', gap:12, marginTop:4 }}>
+                          <button type="button" onClick={adjustCurrentPhoto}
+                            style={{ fontSize:11, color:BRAND.orange, fontWeight:700, background:'none', border:'none', cursor:'pointer', padding:0 }}>
+                            Ajustar enquadramento
+                          </button>
+                          <button type="button" onClick={() => { setForm({...form, imageUrl:''}); setPhotoInfo(''); }}
+                            style={{ fontSize:11, color:BRAND.red, background:'none', border:'none', cursor:'pointer', padding:0 }}>
+                            Remover foto
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

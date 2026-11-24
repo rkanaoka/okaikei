@@ -205,3 +205,24 @@ export function TableHead({ cols }: { cols: string[] }) {
     </thead>
   );
 }
+
+// ── Navegação entre seções do admin ───────────────────────────────────────────
+// O admin não usa rotas por URL (a seção é estado do Admin.tsx). Para "links"
+// entre páginas — ex.: Notas fiscais → Pedidos — a página de origem chama
+// navigateAdmin() e a de destino lê o foco com peekAdminFocus() (pode ser chamado
+// em render — idempotente) e o descarta com clearAdminFocus() num efeito.
+export type AdminNavRequest = { section: string; comandaId?: string; date?: string };
+let pendingAdminFocus: AdminNavRequest | null = null;
+
+export function navigateAdmin(req: AdminNavRequest) {
+  pendingAdminFocus = req;
+  window.dispatchEvent(new CustomEvent<AdminNavRequest>('admin:navigate', { detail: req }));
+}
+
+export function peekAdminFocus(section: string): AdminNavRequest | null {
+  return pendingAdminFocus?.section === section ? pendingAdminFocus : null;
+}
+
+export function clearAdminFocus() {
+  pendingAdminFocus = null;
+}

@@ -510,6 +510,9 @@ export type FiscalDocument = {
   protocolo: string | null; qrcodeUrl: string | null; urlConsultaNf: string | null; total: string | number;
   errorMessage: string | null; printedAt: string | null; cancelledAt: string | null; createdAt: string; updatedAt: string;
   xmlUrl?: string | null; danfeUrl?: string | null; historico?: any[];
+  /** Só na listagem: CPF/CNPJ do destinatário (dígitos) e resumo da comanda da nota. */
+  destinatario?: string | null;
+  comanda?: { id: string; number: number; tableLabel: string | null; customerName: string | null; openedAt: string; closedAt: string | null } | null;
 };
 
 const SLOW = { timeout: 90_000 }; // emissão é síncrona na SEFAZ
@@ -534,7 +537,7 @@ export const fiscalApi = {
   applyTemplate:  (d: { templateId: string | null; itemIds: string[]; cfop?: string | null }) =>
     http.post('/fiscal/items/apply-template', d) as unknown as Promise<{ applied: number }>,
 
-  documents:  (q: { status?: string; comandaId?: string; from?: string; to?: string; limit?: number } = {}) =>
+  documents:  (q: { status?: string; comandaId?: string; from?: string; to?: string; numero?: string; destinatario?: string; limit?: number } = {}) =>
     http.get('/fiscal/documents', { params: q }) as unknown as Promise<FiscalDocument[]>,
   document:   (id: string) => http.get(`/fiscal/documents/${id}`) as unknown as Promise<FiscalDocument>,
   cancel:     (id: string, justificativa: string) => http.post(`/fiscal/documents/${id}/cancel`, { justificativa }, SLOW),

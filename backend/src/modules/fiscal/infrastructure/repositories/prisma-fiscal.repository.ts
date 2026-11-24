@@ -116,11 +116,20 @@ export class PrismaFiscalRepository implements FiscalRepositoryPort {
     });
   }
 
-  listDocuments(filter: { status?: string; comandaId?: string; from?: Date; to?: Date; limit?: number }) {
+  listDocuments(filter: { status?: string; comandaId?: string; from?: Date; to?: Date; numero?: string; destinatario?: string; limit?: number }) {
     return this.db.fiscalDocument.findMany({
       where: {
         ...(filter.status ? { status: filter.status } : {}),
         ...(filter.comandaId ? { comandaId: filter.comandaId } : {}),
+        // Número como texto na Focus: aceita "123" e "000123"
+        ...(filter.numero ? { numero: { in: [filter.numero, filter.numero.replace(/^0+(?=\d)/, '')] } } : {}),
+        // Destinatário fica no payload enviado à Focus (cpf_destinatario / cnpj_destinatario)
+        ...(filter.destinatario
+          ? { OR: [
+              { requestPayload: { path: ['cpf_destinatario'], equals: filter.destinatario } },
+              { requestPayload: { path: ['cnpj_destinatario'], equals: filter.destinatario } },
+            ] }
+          : {}),
         ...(filter.from || filter.to
           ? { createdAt: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } }
           : {}),
@@ -128,6 +137,18 @@ export class PrismaFiscalRepository implements FiscalRepositoryPort {
       orderBy: { createdAt: 'desc' },
       take: Math.min(filter.limit ?? 100, 500),
     });
+  }
+
+  async findComandaSummaries(ids: string[]) {
+    if (ids.length === 0) return [];
+    const rows = await this.db.comanda.findMany({
+      where:  { id: { in: ids } },
+      select: { id: true, number: true, customerName: true, openedAt: true, closedAt: true, table: { select: { label: true } } },
+    });
+    return rows.map((r: any) => ({
+      id: r.id, number: r.number, tableLabel: r.table?.label ?? null,
+      customerName: r.customerName ?? null, openedAt: r.openedAt, closedAt: r.closedAt,
+    }));
   }
 
   // ── Auditoria ────────────────────────────────────────────────────────────

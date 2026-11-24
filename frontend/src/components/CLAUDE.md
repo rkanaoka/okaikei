@@ -9,6 +9,7 @@ Componentes reutilizáveis entre páginas (não são rotas).
 | `CashRegisterMenu.tsx`  | Menu/modais de abertura, movimentação e fechamento de caixa |
 | `CurrencyInput.tsx`     | Campo padrão para digitar valores em R$                     |
 | `FiscalNfcePanel.tsx`   | Emitir/consultar/imprimir NFC-e de uma comanda fechada (Caixa); some com o fiscal desligado |
+| `ImageCropper.tsx`     | Enquadramento (arrastar/zoom) + otimização de foto no navegador (800×800 WebP, ~≤250 KB) antes do upload |
 
 ## CurrencyInput — padrão obrigatório para valores em R$
 Todo campo onde o operador digita um valor em Reais deve usar

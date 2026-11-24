@@ -3,6 +3,7 @@ import { MENU_REPOSITORY_PORT, MenuRepositoryPort } from '@/modules/ponto-de-ven
 import { RedisService } from '@/shared/infrastructure/cache/redis.service';
 import { SyncService }  from '@/modules/sync/application/use-cases/sync.service';
 import { uuidv7 }       from 'uuidv7';
+import { IMAGE_PROCESSOR_PORT, ImageProcessorPort } from '@/modules/ponto-de-venda/application/contracts/image-processor.port';
 
 // A relação M2M não preserva ordem customizada — reordena pelos ids em optionGroupOrder
 function orderGroups(groups: any[], order: string[]): any[] {
@@ -32,6 +33,7 @@ export class MenuService {
     @Inject(MENU_REPOSITORY_PORT) private readonly repo: MenuRepositoryPort,
     private readonly redis: RedisService,
     private readonly sync:  SyncService,
+    @Inject(IMAGE_PROCESSOR_PORT) private readonly images: ImageProcessorPort,
   ) {}
 
   async findAll(includeUnavailable = false) {
@@ -61,7 +63,8 @@ export class MenuService {
     imageUrl?: string; chargeServiceFee?: boolean; availabilitySchedule?: any;
     optionGroupIds?: string[];
   }) {
-    const item = await this.repo.createItem({ id: uuidv7(), ...dto });
+    const imageUrl = await this.images.normalizeMenuPhoto(dto.imageUrl);
+    const item = await this.repo.createItem({ id: uuidv7(), ...dto, imageUrl: imageUrl ?? undefined });
     await this.redis.invalidateMenu();
     await this.sync.enqueue('menu.item_created', 'MenuItem', item.id, item);
     return item;
@@ -74,7 +77,11 @@ export class MenuService {
     imageUrl: string | null; chargeServiceFee: boolean; availabilitySchedule: any;
     optionGroupIds: string[];
   }>) {
-    await this.findOne(id);
+    const current = await this.findOne(id);
+    // Só reprocessa a foto quando ela muda (salvar o item de novo não recomprime a imagem)
+    if (dto.imageUrl !== undefined && dto.imageUrl !== current.imageUrl) {
+      dto = { ...dto, imageUrl: await this.images.normalizeMenuPhoto(dto.imageUrl) };
+    }
     const item = await this.repo.updateItem(id, dto);
     await this.redis.invalidateMenu();
     await this.sync.enqueue('menu.item_updated', 'MenuItem', id, item);

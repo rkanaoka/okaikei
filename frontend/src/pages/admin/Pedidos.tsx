@@ -1,20 +1,30 @@
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, useMemo, Fragment, useRef } from 'react';
 import { comandasApi } from '@/services/api';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import {
   BRAND, fmtBRL, fmtDate, getSubtotal, getTotal, getSurcharge, getDiscount,
   Card, PageHeader, TableHead,
-  toSPDateStr, inDateRange, DateRangeFilter, getShiftLabel,
+  toSPDateStr, inDateRange, DateRangeFilter, getShiftLabel, peekAdminFocus, clearAdminFocus,
 } from './shared';
 
 export default function Pedidos() {
   const { labelOf, colorOf } = usePaymentMethods();
   const [loading, setLoading]     = useState(true);
   const [comandas, setComandas]   = useState<any[]>([]);
-  const [expandedId, setExpanded] = useState<string | null>(null);
+  // Vindo de outra página (ex.: Notas fiscais → "Abrir em Pedidos"): abre no dia e na comanda pedidos
+  const focus = useRef(peekAdminFocus('rel-pedidos'));
+  const [expandedId, setExpanded] = useState<string | null>(() => peekAdminFocus('rel-pedidos')?.comandaId ?? null);
 
-  const [dateFrom, setDateFrom] = useState(() => toSPDateStr(new Date()));
-  const [dateTo, setDateTo]     = useState(() => toSPDateStr(new Date()));
+  const [dateFrom, setDateFrom] = useState(() => peekAdminFocus('rel-pedidos')?.date ?? toSPDateStr(new Date()));
+  const [dateTo, setDateTo]     = useState(() => peekAdminFocus('rel-pedidos')?.date ?? toSPDateStr(new Date()));
+
+  useEffect(() => { clearAdminFocus(); }, []);
+
+  useEffect(() => {
+    if (loading || !focus.current?.comandaId) return;
+    document.getElementById(`comanda-${focus.current.comandaId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    focus.current = null;
+  }, [loading]);
 
   useEffect(() => {
     comandasApi.list('CLOSED')
@@ -79,6 +89,7 @@ export default function Pedidos() {
                 return (
                   <Fragment key={c.id}>
                     <tr
+                      id={`comanda-${c.id}`}
                       onClick={() => setExpanded(isOpen ? null : c.id)}
                       style={{ borderBottom: isOpen ? 'none' : '1px solid #f0f0f0', cursor:'pointer', background: isOpen ? '#FF6B2B08' : 'transparent' }}>
                       <td style={{ padding:'10px 16px', color:'#888' }}>{fmtDate(saleDate)}</td>

@@ -232,10 +232,28 @@ export class NfceService {
 
   // ── Consultas locais ─────────────────────────────────────────────────────
 
-  async list(filter: { status?: string; comandaId?: string; from?: string; to?: string; limit?: number }) {
-    return this.repo.listDocuments({
-      status: filter.status, comandaId: filter.comandaId, limit: filter.limit,
-      from: filter.from ? new Date(filter.from) : undefined, to: filter.to ? new Date(filter.to) : undefined,
+  async list(filter: { status?: string; comandaId?: string; from?: string; to?: string; numero?: string; destinatario?: string; limit?: number }) {
+    const numero = filter.numero?.replace(/\D/g, '') || undefined;
+    const destinatario = filter.destinatario?.replace(/\D/g, '') || undefined;
+    if (destinatario && destinatario.length !== 11 && destinatario.length !== 14) {
+      throw new BadRequestException('Informe o CPF (11 dígitos) ou CNPJ (14 dígitos) completo');
+    }
+    const docs = await this.repo.listDocuments({
+      status: filter.status, comandaId: filter.comandaId, limit: filter.limit, numero, destinatario,
+      from: parseDayBoundary(filter.from, 'start'), to: parseDayBoundary(filter.to, 'end'),
+    });
+
+    const comandas = await this.repo.findComandaSummaries([...new Set(docs.map((d) => d.comandaId))]);
+    const byId = new Map(comandas.map((c) => [c.id, c]));
+    return docs.map((d: any) => {
+      const payload = (d.requestPayload ?? {}) as Record<string, any>;
+      // Payloads ficam fora da listagem (pesados); o detalhe continua trazendo tudo
+      const { requestPayload: _req, responsePayload: _res, ...rest } = d;
+      return {
+        ...rest,
+        destinatario: payload.cpf_destinatario ?? payload.cnpj_destinatario ?? null,
+        comanda: byId.get(d.comandaId) ?? null,
+      };
     });
   }
 
@@ -380,4 +398,18 @@ export class NfceService {
       this.logger.warn(`Pós-autorização de ${doc.ref}: ${err.message}`);
     }
   }
+}
+
+/**
+ * "2026-11-18" (campo de data do admin) → início/fim do dia no fuso de São Paulo.
+ * Sem isso, new Date("2026-11-18") seria meia-noite UTC (21h do dia anterior em SP).
+ */
+function parseDayBoundary(value: string | undefined, edge: 'start' | 'end'): Date | undefined {
+  if (!value) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T${edge === 'start' ? '00:00:00.000' : '23:59:59.999'}-03:00`);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) throw new BadRequestException('Data inválida');
+  return d;
 }

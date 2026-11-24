@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BRAND, EmptyPlaceholder } from './admin/shared';
 import { AuthProvider, useAuth } from '@/store/AuthContext';
@@ -209,6 +209,19 @@ function AdminShell() {
     setSection(id);
     if (groupLabel) setOpenGroups(g => ({ ...g, [groupLabel]: true }));
   }
+
+  // "Links" entre seções (ver navigateAdmin em admin/shared.tsx) — respeita as permissões do menu
+  useEffect(() => {
+    function onNavigate(e: Event) {
+      const id = (e as CustomEvent<{ section: SectionId }>).detail?.section;
+      for (const item of nav) {
+        if (item.type === 'link' && item.id === id) return go(id);
+        if (item.type === 'group' && item.items.some(i => i.id === id)) return go(id, item.label);
+      }
+    }
+    window.addEventListener('admin:navigate', onNavigate);
+    return () => window.removeEventListener('admin:navigate', onNavigate);
+  }, [nav]);
 
   return (
     <div style={{ display:'flex', minHeight:'100vh', fontFamily:'system-ui,-apple-system,sans-serif', background:BRAND.gray }}>
